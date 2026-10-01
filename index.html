@@ -1,0 +1,1748 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luftkissenbahn-Labor</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Virtuelle Luftkissenbahn in WebGL: beschleunigte Bewegung und Stoßversuche mit Lichtschranken und Messprotokoll (Physik EF, NRW).">
+<style>
+:root{
+  --bg:#f2efe8; --surface:#fffdf9; --surface2:#f7f3ec; --ink:#1d2329; --muted:#5b6570; --line:#e2dbcf;
+  --accent:#1f5b9e; --accent-ink:#fff; --accent-soft:#e3ecf7; --c1:#2f6db5; --c2:#cf6d27;
+  --good:#1d7a45; --warn:#a2580a; --grid:#e8e2d7; --axis:#8a8f96; --shadow:0 1px 2px rgba(30,25,15,.06),0 6px 22px rgba(30,25,15,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16191d; --surface:#1f2328; --surface2:#262b31; --ink:#e7e9ec; --muted:#9aa3ad; --line:#323840;
+    --accent:#6ea6e6; --accent-ink:#0d1520; --accent-soft:#22324a; --c1:#6ea6e6; --c2:#ee9a5c;
+    --good:#58c48a; --warn:#e3a35b; --grid:#2c3238; --axis:#7d858e; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16191d; --surface:#1f2328; --surface2:#262b31; --ink:#e7e9ec; --muted:#9aa3ad; --line:#323840;
+  --accent:#6ea6e6; --accent-ink:#0d1520; --accent-soft:#22324a; --c1:#6ea6e6; --c2:#ee9a5c;
+  --good:#58c48a; --warn:#e3a35b; --grid:#2c3238; --axis:#7d858e; --shadow:none;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+.mono{font-variant-numeric:tabular-nums}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px 12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{flex:none}
+.brand h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.brand p{margin:0;color:var(--muted);font-size:13px}
+.help{position:relative}
+.help summary{cursor:pointer;list-style:none;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:14px}
+.help summary::-webkit-details-marker{display:none}
+.help[open] .helpBody{display:block}
+.helpBody{position:absolute;right:0;top:44px;z-index:20;width:min(520px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.18);font-size:14px}
+.helpBody h3{margin:.6em 0 .3em;font-size:14px}
+.helpBody ol,.helpBody ul{margin:.2em 0 .6em;padding-left:1.2em}
+.helpBody li{margin:.15em 0}
+.lab{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:0 16px 16px}
+.stage{position:relative;border-radius:14px;overflow:hidden;height:min(70vh,740px);min-height:420px;background:#cfc8bb;box-shadow:var(--shadow)}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.chip{background:rgba(255,253,249,.88);color:#1d2329;border-radius:999px;padding:4px 11px;font-size:13px;backdrop-filter:blur(6px);display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:#9aa0a6}
+.chip.on .dot{background:#22a35a;box-shadow:0 0 0 3px rgba(34,163,90,.2)}
+.camBar{position:absolute;left:10px;bottom:10px;display:flex;gap:4px;flex-wrap:wrap;max-width:calc(100% - 20px)}
+.camBar button{background:rgba(255,253,249,.88);color:#1d2329;border:0;border-radius:8px;padding:5px 9px;font-size:12.5px;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.camBar button[aria-pressed="true"]{background:#1f5b9e;color:#fff}
+.runBar{position:absolute;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.runBar button,.runBar select{border:0;border-radius:10px;padding:9px 13px;cursor:pointer;background:rgba(255,253,249,.92);color:#1d2329;box-shadow:0 1px 3px rgba(0,0,0,.15);font-size:14px}
+.runBar button.primary{background:#1f5b9e;color:#fff;font-weight:600}
+.runBar button:disabled{opacity:.5;cursor:default}
+.toast{position:absolute;left:50%;top:52px;transform:translateX(-50%) translateY(-6px);background:rgba(29,35,41,.92);color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;max-width:min(520px,calc(100% - 24px));text-align:center;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 14px 14px;max-height:min(70vh,740px);min-height:420px;overflow:auto;box-shadow:var(--shadow)}
+.grp{padding:12px 0;border-bottom:1px solid var(--line)}
+.grp:last-child{border-bottom:0}
+.grp h3{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface2)}
+.seg button{flex:1;border:0;background:transparent;padding:7px 6px;cursor:pointer;font-size:13.5px;line-height:1.2}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.row{margin:10px 0 0}
+.row label{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.row label output{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600}
+.row input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
+.row .hint{font-size:12.5px;color:var(--muted);margin-top:2px}
+.sub{font-size:13px;color:var(--muted);margin:6px 0 0}
+.blowerBtn{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);cursor:pointer;font-weight:600;text-align:left}
+.blowerBtn .led{width:12px;height:12px;border-radius:50%;background:#8b9096;flex:none}
+.blowerBtn.on{border-color:var(--good)}
+.blowerBtn.on .led{background:#22a35a;box-shadow:0 0 0 4px rgba(34,163,90,.18)}
+.meter{height:6px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--good);transition:width .1s linear}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px;margin-top:8px;cursor:pointer}
+.check input{accent-color:var(--accent);margin-top:3px}
+select.sel{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:9px;background:var(--surface2)}
+.tag1,.tag2{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.tag1{background:var(--c1)}.tag2{background:var(--c2)}
+.wrap{padding:0 16px 32px;display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+.cardHead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.cardHead h2{font-size:17px;margin:0;margin-right:auto}
+.btn{border:1px solid var(--line);background:var(--surface2);border-radius:9px;padding:7px 12px;cursor:pointer;font-size:14px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.5;cursor:default}
+.scroll-x{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
+.tbl th{text-align:right;font-weight:600;color:var(--muted);font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td.l,.tbl th.l{text-align:left}
+.tbl tr.marker td{color:var(--warn);text-align:center;font-size:13px;background:var(--surface2)}
+.tbl .del{border:0;background:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px}
+.tbl .del:hover{color:#c0392b}
+.empty{color:var(--muted);font-size:14px;padding:10px 0}
+.note{color:var(--muted);font-size:13px;margin:8px 0 0}
+.legend{font-size:13px;color:var(--muted);margin:8px 0 0;display:grid;gap:2px}
+.chartWrap{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.chartCtl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.chartCtl select{padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);font-size:14px;max-width:100%}
+#chart{width:100%;height:320px;display:block}
+.fitOut{font-size:14px;margin:8px 0 0}
+.fitOut b{font-variant-numeric:tabular-nums}
+@media (max-width:920px){
+  .lab{grid-template-columns:1fr}
+  .stage{height:58vh;min-height:320px}
+  .panel{max-height:none;min-height:0}
+}
+@media (max-width:520px){
+  .runBar{left:10px;right:10px;bottom:46px;justify-content:center}
+  .runBar button,.runBar select{padding:8px 10px;font-size:13px}
+  .stage{height:64vh}
+}
+@media print{
+  .stage,.panel,header .help,.cardHead button,.tbl .del{display:none!important}
+  .lab{display:none}
+  body{background:#fff}
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="10" fill="#1f5b9e"/><path d="M6 27h28" stroke="#cfd8e3" stroke-width="3" stroke-linecap="round"/><path d="M10 25l4-6h9l4 6z" fill="#fff"/><rect x="17" y="12" width="2.4" height="7" fill="#fff"/><circle cx="31" cy="20" r="3" fill="none" stroke="#fff" stroke-width="1.6"/></svg>
+    <div><h1>Luftkissenbahn</h1><p>Virtuelles Physiklabor · Einführungsphase · Kinematik und Impuls</p></div>
+  </div>
+  <details class="help">
+    <summary>Anleitung</summary>
+    <div class="helpBody">
+      <h3>So gehst du vor</h3>
+      <ol>
+        <li>Schalte das <b>Gebläse</b> ein (Knopf rechts oder Klick auf das Gerät links auf dem Tisch). Erst dann schwebt der Wagen auf dem Luftpolster.</li>
+        <li>Wähle den <b>Versuch</b>: beschleunigte Bewegung oder Stoß.</li>
+        <li>Stelle Massen und <b>Lichtschranken</b> ein. Am gelben Maßstab der Bahn kannst du die Positionen ablesen.</li>
+        <li>Starte mit <b>Haltemagnet lösen</b> bzw. <b>Federstarter auslösen</b>. Das Zählgerät startet bei t = 0.</li>
+        <li>Übernimm die Messwerte mit <b>In Messprotokoll übernehmen</b>. Wiederhole den Versuch mit anderen Einstellungen.</li>
+        <li>Werte im Protokoll aus: Diagramme, Ausgleichskurve, Impulsbilanz. Mit <b>CSV</b> kannst du die Daten in eine Tabellenkalkulation holen.</li>
+      </ol>
+      <h3>Gut zu wissen</h3>
+      <ul>
+        <li>Jede Lichtschranke misst den Zeitpunkt t, an dem die Blende den Strahl erreicht, und die Dunkelzeit Δt. Daraus folgt v = b / Δt.</li>
+        <li>s ist der Weg der Blendenvorderkante vom Start bis zur Lichtschranke.</li>
+        <li>Mit dem Abfangteller endet die Beschleunigung nach der eingestellten Strecke. Danach fährt der Wagen (fast) gleichförmig weiter.</li>
+        <li>Die echte Bahn hat eine sehr kleine Restreibung. Mit „ideale Bahn“ schaltest du sie ab.</li>
+      </ul>
+      <h3>Ideen für Aufträge</h3>
+      <ul>
+        <li>Zeige mit dem s-t²-Diagramm, dass s ~ t² gilt. Bestimme a und vergleiche mit a = m<sub>Z</sub>·g / (m<sub>W</sub> + m<sub>Z</sub>).</li>
+        <li>Verdopple die Zugmasse bzw. die Wagenmasse. Wie ändert sich a?</li>
+        <li>Prüfe bei elastischen und unelastischen Stößen: Bleibt der Gesamtimpuls erhalten? Und die Bewegungsenergie?</li>
+      </ul>
+    </div>
+  </details>
+</header>
+
+<main class="lab">
+  <section class="stage" id="stage">
+    <canvas id="c" aria-label="3D-Ansicht der Luftkissenbahn"></canvas>
+    <div class="hud">
+      <span class="chip" id="chipBlower"><i class="dot"></i><span>Gebläse aus</span></span>
+      <span class="chip mono" id="chipT">t = 0,000 s</span>
+      <span class="chip" id="chipState">bereit</span>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="camBar" id="camBar">
+      <button data-cam="total" aria-pressed="true">Übersicht</button>
+      <button data-cam="side">Seite</button>
+      <button data-cam="pulley">Umlenkrolle</button>
+      <button data-cam="follow">Mitfahren</button>
+    </div>
+    <div class="runBar">
+      <select id="selSpeed" title="Zeitlupe" aria-label="Zeitlupe">
+        <option value="1">1×</option><option value="0.5">0,5×</option><option value="0.25">0,25×</option><option value="0.1">0,1×</option>
+      </select>
+      <button id="btnPause" title="Pause">Pause</button>
+      <button id="btnReset">Zurücksetzen</button>
+      <button id="btnStart" class="primary">Haltemagnet lösen</button>
+    </div>
+  </section>
+
+  <aside class="panel" aria-label="Versuchsaufbau">
+    <div class="grp">
+      <h3>Gebläse</h3>
+      <button class="blowerBtn" id="btnBlower"><span class="led"></span><span id="blowerTxt">Gebläse einschalten</span></button>
+      <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+    </div>
+
+    <div class="grp">
+      <h3>Versuch</h3>
+      <div class="seg" id="segMode">
+        <button data-v="bew" aria-pressed="true">Beschleunigte Bewegung</button>
+        <button data-v="stoss" aria-pressed="false">Stoßversuche</button>
+      </div>
+    </div>
+
+    <div class="grp" id="optBew">
+      <h3>Antrieb</h3>
+      <div class="seg" id="segDrive">
+        <button data-v="zug" aria-pressed="true">Zugmasse + Umlenkrolle</button>
+        <button data-v="feder" aria-pressed="false">Federstarter</button>
+      </div>
+      <div id="zugOpts">
+        <div class="row"><label for="rMh"><span>Zugmasse m<sub>Z</sub></span> <output id="oMh"></output></label><input type="range" id="rMh" min="5" max="50" step="5" value="10"></div>
+        <div class="row"><label for="rSa"><span>Abfangteller nach</span> <output id="oSa"></output></label><input type="range" id="rSa" min="0.20" max="0.85" step="0.05" value="0.85">
+          <div class="hint" id="hSa">Ganz rechts: das Massestück fällt bis auf den Boden.</div></div>
+      </div>
+      <div id="federOpts1" hidden>
+        <div class="row"><label for="rF0"><span>Federstarter Stufe</span> <output id="oF0"></output></label><input type="range" id="rF0" min="1" max="3" step="1" value="2"></div>
+      </div>
+      <div class="row"><label for="rM1b"><span>Zusatzmasse Wagen</span> <output id="oM1b"></output></label><input type="range" id="rM1b" min="0" max="200" step="50" value="0">
+        <div class="hint" id="hM1b"></div></div>
+    </div>
+
+    <div class="grp" id="optStoss" hidden>
+      <h3>Stoßart</h3>
+      <div class="seg" id="segColl">
+        <button data-v="el" aria-pressed="true">elastisch<br><small>Federbügel</small></button>
+        <button data-v="inel" aria-pressed="false">unelastisch<br><small>Nadel + Knete</small></button>
+      </div>
+      <h3 style="margin-top:14px"><span class="tag1"></span>Wagen 1</h3>
+      <div class="row"><label for="rM1s"><span>Zusatzmasse</span> <output id="oM1s"></output></label><input type="range" id="rM1s" min="0" max="200" step="50" value="0"></div>
+      <div class="row"><label for="rF1"><span>Federstarter Stufe</span> <output id="oF1"></output></label><input type="range" id="rF1" min="1" max="3" step="1" value="2"></div>
+      <h3 style="margin-top:14px"><span class="tag2"></span>Wagen 2</h3>
+      <div class="seg" id="segW2">
+        <button data-v="ruht" aria-pressed="true">ruht</button>
+        <button data-v="entgegen" aria-pressed="false">fährt entgegen</button>
+      </div>
+      <div class="row"><label for="rM2"><span>Zusatzmasse</span> <output id="oM2"></output></label><input type="range" id="rM2" min="0" max="200" step="50" value="0"></div>
+      <div class="row" id="rowS2"><label for="rS2"><span>Position (Mitte)</span> <output id="oS2"></output></label><input type="range" id="rS2" min="0.60" max="1.60" step="0.05" value="1.00"></div>
+      <div class="row" id="rowF2" hidden><label for="rF2"><span>Federstarter Stufe</span> <output id="oF2"></output></label><input type="range" id="rF2" min="1" max="3" step="1" value="2"></div>
+    </div>
+
+    <div class="grp">
+      <h3>Lichtschranken</h3>
+      <div class="seg" id="segN">
+        <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button>
+      </div>
+      <div id="gateRows"></div>
+      <div class="row"><label for="selB">Blendenbreite b</label>
+        <select class="sel" id="selB"><option value="0.025">2,5 cm</option><option value="0.05" selected>5,0 cm</option><option value="0.10">10,0 cm</option></select></div>
+    </div>
+
+    <div class="grp">
+      <h3>Optionen</h3>
+      <label class="check"><input type="checkbox" id="cbIdeal"> <span>Ideale Bahn (ohne Restreibung, Federbügel ohne Verlust)</span></label>
+      <label class="check"><input type="checkbox" id="cbSound" checked> <span>Geräusche</span></label>
+    </div>
+  </aside>
+</main>
+
+<section class="wrap">
+  <div class="card">
+    <div class="cardHead">
+      <h2>Zählgerät · aktueller Lauf</h2>
+      <button class="btn primary" id="btnTake">In Messprotokoll übernehmen</button>
+    </div>
+    <div class="scroll-x"><table class="tbl" id="runTable"></table></div>
+    <p class="note" id="runNote"></p>
+  </div>
+
+  <div class="card">
+    <div class="cardHead">
+      <h2>Messprotokoll</h2>
+      <div class="seg" id="segProto" style="min-width:220px">
+        <button data-v="bew" aria-pressed="true">Bewegung</button>
+        <button data-v="stoss" aria-pressed="false">Stoß</button>
+      </div>
+      <button class="btn" id="btnCsv">CSV</button>
+      <button class="btn" id="btnClear">Leeren</button>
+    </div>
+    <div class="scroll-x"><table class="tbl" id="protoTable"></table></div>
+    <div class="legend" id="legend"></div>
+    <div class="chartWrap">
+      <div class="chartCtl" id="ctlBew">
+        <select id="selSeries" aria-label="Messreihe"></select>
+        <select id="selDia" aria-label="Diagramm">
+          <option value="st">s-t-Diagramm</option>
+          <option value="vt">v-t-Diagramm</option>
+          <option value="st2">s-t²-Diagramm</option>
+        </select>
+        <select id="selFit" aria-label="Ausgleichskurve"></select>
+      </div>
+      <div class="chartCtl" id="ctlStoss" hidden>
+        <select id="selStossDia" aria-label="Diagramm">
+          <option value="p">Impuls vorher / nachher</option>
+          <option value="e">Bewegungsenergie vorher / nachher</option>
+        </select>
+      </div>
+      <canvas id="chart"></canvas>
+      <p class="fitOut" id="fitOut"></p>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* =========================================================
+   Konstanten (Meter, Kilogramm, Sekunden)
+   s = Position der Wagenmitte entlang der Bahn, 0 … L
+   ========================================================= */
+const L = 2.0, X0 = -1.0;
+const CART_L = 0.20, CONTACT = CART_L + 0.02;
+const TABLE_Y = 0.90, RAIL_BASE = 0.96, BODY_TOP = 1.00, APEX = 1.035;
+const HOOK_Y = APEX + 0.012, PR = 0.022, AXLE_Y = HOOK_Y - PR, PX = X0 + L + 0.03;
+const END_W = 0.04, SMIN = END_W + CART_L / 2, SMAX = L - END_W - CART_L / 2;
+const G = 9.81, M_CART = 0.200;
+const TOP_Y0 = AXLE_Y - 0.05;           // Aufhängepunkt des Massestücks vor dem Start
+const FEDER_E = [0.005, 0.0125, 0.0225]; // Federenergie je Stufe in J
+const E_END = 0.55;                      // Gummipuffer an den Enden
+
+/* ---------- Parameter ---------- */
+const P = {
+  mode: 'bew', drive: 'zug',
+  mh: 0.010, sa: 0.85, m1b: 0, f0: 2,
+  coll: 'el', m1s: 0, f1: 2, w2: 'ruht', m2: 0, s2: 1.0, f2: 2,
+  gatesBew: [0.35, 0.55, 0.75, 0.95], nBew: 4,
+  gatesSto: [0.55, 1.45, 0.35, 1.65], nSto: 2,
+  b: 0.05, ideal: false, sound: true, speed: 1
+};
+const gates = () => P.mode === 'bew' ? P.gatesBew.slice(0, P.nBew) : P.gatesSto.slice(0, P.nSto);
+const m1 = () => M_CART + (P.mode === 'bew' ? P.m1b : P.m1s);
+const m2 = () => M_CART + P.m2;
+const weightDiscs = () => Math.round(P.mh / 0.005) - 1;
+const weightH = () => 0.016 + weightDiscs() * 0.0042;
+
+/* ---------- Zustand ---------- */
+const S = {
+  t: 0, running: false, paused: false, done: false, released: false,
+  blower: false, p: 0,
+  c: [{ s: SMIN, v: 0, s0: SMIN }, { s: 1.0, v: 0, s0: 1.0 }],
+  w: { d: 0, caught: false }, coupled: false, tColl: null, vAfter: null, vInit: [0, 0],
+  events: [], cov: [[], []], open: [[], []], still: 0, launchT: -1, launchT2: -1, stuck: false
+};
+
+/* =========================================================
+   Renderer, Szene, Kamera
+   ========================================================= */
+const stage = document.getElementById('stage');
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const MAXANI = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xd8d2c6);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.02, 40);
+camera.position.set(0.12, 1.45, 1.75);
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0.02, 0.99, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.25;
+controls.maxDistance = 4.5;
+controls.maxPolarAngle = Math.PI * 0.53;
+
+/* Licht */
+scene.add(new THREE.HemisphereLight(0xfff4e4, 0x5d564c, 0.9));
+const key = new THREE.DirectionalLight(0xfff3e2, 2.2);
+key.position.set(1.6, 3.6, 2.4);
+key.target.position.set(0, 0.9, 0);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -1.9; key.shadow.camera.right = 1.9;
+key.shadow.camera.top = 1.4; key.shadow.camera.bottom = -1.4;
+key.shadow.camera.near = 1; key.shadow.camera.far = 8;
+key.shadow.bias = -0.0003; key.shadow.normalBias = 0.015;
+scene.add(key, key.target);
+const windowLight = new THREE.DirectionalLight(0xdfeaff, 0.7);
+windowLight.position.set(2.6, 2.2, -1.6);
+scene.add(windowLight);
+
+/* =========================================================
+   Hilfsfunktionen für Geometrie und Texturen
+   ========================================================= */
+function tex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = MAXANI;
+  return t;
+}
+const std = (color, rough = 0.6, metal = 0, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
+function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene, shadow = true) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  if (shadow) { m.castShadow = true; m.receiveShadow = true; }
+  parent.add(m);
+  return m;
+}
+const box = (w, h, d, mat, x, y, z, parent, shadow) => mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, parent, shadow);
+function cylX(r, len, mat, x, y, z, parent, seg = 20) { const m = mesh(new THREE.CylinderGeometry(r, r, len, seg), mat, x, y, z, parent); m.rotation.z = Math.PI / 2; return m; }
+function cylZ(r, len, mat, x, y, z, parent, seg = 20) { const m = mesh(new THREE.CylinderGeometry(r, r, len, seg), mat, x, y, z, parent); m.rotation.x = Math.PI / 2; return m; }
+const cylY = (r, len, mat, x, y, z, parent, seg = 20) => mesh(new THREE.CylinderGeometry(r, r, len, seg), mat, x, y, z, parent);
+
+const MAT = {
+  alu: std(0xc8cdd3, 0.32, 0.85),
+  aluCart: std(0xd5d9de, 0.28, 0.8),
+  aluDark: std(0x8e959d, 0.4, 0.8),
+  anod: std(0x24272b, 0.45, 0.5),
+  black: std(0x1c1e21, 0.6, 0.1),
+  steel: std(0xb9bec4, 0.25, 0.95),
+  brass: std(0xc9a557, 0.3, 0.9),
+  copper: std(0xb06a38, 0.35, 0.85),
+  rubber: std(0x2a2b2d, 0.9, 0),
+  plastic: std(0x2c3542, 0.5, 0.05),
+  frame: std(0x6d7379, 0.45, 0.6),
+  wood: std(0x9b7652, 0.7, 0),
+  cream: std(0xeae4d6, 0.7, 0)
+};
+
+/* =========================================================
+   Raum
+   ========================================================= */
+const ROOM = { x0: -3.6, x1: 3.6, z0: -1.8, z1: 4.6, h: 3.2 };
+(function buildRoom() {
+  // Boden: helles Linoleum mit feinen Fugen
+  const floorTex = tex(512, 512, (g, w, h) => {
+    g.fillStyle = '#b8b0a2'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 4000; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,255,255' : '60,50,40'},${Math.random() * 0.05})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    g.strokeStyle = 'rgba(80,70,60,.28)'; g.lineWidth = 2;
+    for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(i * w / 4, 0); g.lineTo(i * w / 4, h); g.stroke(); g.beginPath(); g.moveTo(0, i * h / 4); g.lineTo(w, i * h / 4); g.stroke(); }
+  });
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(3.6, 3.2);
+  const floor = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, ROOM.z1 - ROOM.z0), std(0xffffff, 0.85, 0, { map: floorTex }), 0, 0, (ROOM.z0 + ROOM.z1) / 2);
+  floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+
+  const wallMat = std(0xe7e1d5, 0.95);
+  const back = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, ROOM.h), wallMat, 0, ROOM.h / 2, ROOM.z0); back.castShadow = false;
+  const left = mesh(new THREE.PlaneGeometry(ROOM.z1 - ROOM.z0, ROOM.h), wallMat, ROOM.x0, ROOM.h / 2, (ROOM.z0 + ROOM.z1) / 2); left.rotation.y = Math.PI / 2; left.castShadow = false;
+  const right = mesh(new THREE.PlaneGeometry(ROOM.z1 - ROOM.z0, ROOM.h), wallMat, ROOM.x1, ROOM.h / 2, (ROOM.z0 + ROOM.z1) / 2); right.rotation.y = -Math.PI / 2; right.castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, ROOM.z1 - ROOM.z0), std(0xf3f0ea, 1), 0, ROOM.h, (ROOM.z0 + ROOM.z1) / 2); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+
+  // Sockelleiste und Wandverkleidung unten
+  const wains = std(0xcdc3b2, 0.8);
+  box(ROOM.x1 - ROOM.x0, 0.95, 0.015, wains, 0, 0.475, ROOM.z0 + 0.008, scene, false);
+  box(ROOM.x1 - ROOM.x0, 0.03, 0.03, std(0xa89c88, 0.6), 0, 0.965, ROOM.z0 + 0.015, scene, false);
+  box(0.015, 0.95, ROOM.z1 - ROOM.z0, wains, ROOM.x0 + 0.008, 0.475, (ROOM.z0 + ROOM.z1) / 2, scene, false);
+
+  // Deckenleuchten
+  const lampMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff6e8, emissiveIntensity: 1.4 });
+  for (const [x, z] of [[-1.6, 0.3], [1.6, 0.3], [-1.6, 2.4], [1.6, 2.4]]) {
+    box(1.25, 0.04, 0.32, std(0xdedad2, 0.5, 0.3), x, ROOM.h - 0.02, z, scene, false);
+    const p = mesh(new THREE.PlaneGeometry(1.18, 0.26), lampMat, x, ROOM.h - 0.041, z, scene, false); p.rotation.x = Math.PI / 2;
+  }
+
+  // Tafel mit dezentem Kreideanschrieb
+  const boardTex = tex(1536, 640, (g, w, h) => {
+    g.fillStyle = '#2d4639'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { // Wischspuren
+      g.strokeStyle = `rgba(230,240,230,${0.015 + Math.random() * 0.03})`; g.lineWidth = 20 + Math.random() * 60;
+      g.beginPath(); const y = Math.random() * h; g.moveTo(Math.random() * w * 0.3, y); g.bezierCurveTo(w * 0.4, y + 40 * (Math.random() - .5), w * 0.6, y - 30, Math.random() * w * 0.4 + w * 0.6, y + 20 * (Math.random() - .5)); g.stroke();
+    }
+    g.fillStyle = 'rgba(238,240,232,.42)'; g.strokeStyle = 'rgba(238,240,232,.38)';
+    g.font = '64px "Bradley Hand","Segoe Print","Comic Sans MS",cursive';
+    g.fillText('Impulserhaltung', 90, 120);
+    g.lineWidth = 3; g.beginPath(); g.moveTo(90, 136); g.lineTo(560, 140); g.stroke();
+    g.font = '52px "Bradley Hand","Segoe Print","Comic Sans MS",cursive';
+    g.fillText('p = m · v', 110, 230);
+    g.fillText('m₁v₁ + m₂v₂ = m₁v₁\' + m₂v₂\'', 110, 320);
+    g.fillText('s(t) = ½ · a · t²', 900, 230);
+    g.fillText('v(t) = a · t', 900, 320);
+    g.fillText('v = b / Δt', 900, 410);
+    // kleine Skizze einer Bahn
+    g.lineWidth = 4; g.beginPath(); g.moveTo(120, 500); g.lineTo(700, 500); g.stroke();
+    g.strokeRect(200, 455, 90, 40); g.strokeRect(470, 455, 90, 40);
+    g.beginPath(); g.moveTo(300, 475); g.lineTo(380, 475); g.lineTo(368, 465); g.moveTo(380, 475); g.lineTo(368, 485); g.stroke();
+    g.font = '40px "Bradley Hand","Segoe Print","Comic Sans MS",cursive'; g.fillText('v₁', 320, 455);
+    g.fillText('ruht', 480, 445);
+  });
+  const bx = -0.75, by = 1.78, bw = 2.5, bh = 1.05, bz = ROOM.z0 + 0.02;
+  mesh(new THREE.PlaneGeometry(bw, bh), std(0xffffff, 0.92, 0, { map: boardTex }), bx, by, bz, scene, false);
+  const frameMat = std(0x8a6a48, 0.6);
+  box(bw + 0.08, 0.04, 0.03, frameMat, bx, by + bh / 2 + 0.02, bz, scene, false);
+  box(bw + 0.08, 0.04, 0.03, frameMat, bx, by - bh / 2 - 0.02, bz, scene, false);
+  box(0.04, bh, 0.03, frameMat, bx - bw / 2 - 0.02, by, bz, scene, false);
+  box(0.04, bh, 0.03, frameMat, bx + bw / 2 + 0.02, by, bz, scene, false);
+  box(bw * 0.9, 0.015, 0.07, frameMat, bx, by - bh / 2 - 0.045, bz + 0.03, scene, false);
+  const chalk = std(0xf4f1e8, 0.9);
+  cylX(0.005, 0.07, chalk, bx - 0.6, by - bh / 2 - 0.03, bz + 0.04);
+  cylX(0.005, 0.04, std(0xe9c96b, 0.9), bx - 0.48, by - bh / 2 - 0.03, bz + 0.045);
+  box(0.12, 0.03, 0.05, std(0x6b5d4a, 0.95), bx + 0.7, by - bh / 2 - 0.022, bz + 0.035, scene, false);
+
+  // Uhr mit aktueller Zeit
+  const clock = new THREE.Group(); clock.position.set(1.15, 2.45, ROOM.z0 + 0.03); scene.add(clock);
+  const faceTex = tex(256, 256, (g, w) => {
+    g.fillStyle = '#fbfaf6'; g.beginPath(); g.arc(128, 128, 126, 0, 7); g.fill();
+    g.fillStyle = '#222';
+    for (let i = 0; i < 60; i++) { g.save(); g.translate(128, 128); g.rotate(i * Math.PI / 30); g.fillRect(-(i % 5 ? 1 : 3), -118, i % 5 ? 2 : 6, i % 5 ? 8 : 20); g.restore(); }
+    g.font = '600 26px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let i = 1; i <= 12; i++) { const a = i * Math.PI / 6; g.fillText(i, 128 + Math.sin(a) * 82, 128 - Math.cos(a) * 82); }
+  });
+  const face = mesh(new THREE.CircleGeometry(0.17, 48), std(0xffffff, 0.6, 0, { map: faceTex }), 0, 0, 0.012, clock, false);
+  const rim = mesh(new THREE.TorusGeometry(0.175, 0.012, 10, 48), std(0x30343a, 0.4, 0.5), 0, 0, 0.012, clock, false);
+  const handMat = std(0x1d1f22, 0.5);
+  const mkHand = (len, w) => { const g = new THREE.Group(); box(w, len, 0.004, handMat, 0, len / 2 - 0.02, 0, g, false); g.position.z = 0.02; clock.add(g); return g; };
+  const hH = mkHand(0.09, 0.012), hM = mkHand(0.13, 0.008), hS = mkHand(0.14, 0.003);
+  hS.children[0].material = std(0xc0392b, 0.5);
+  window.__clock = { hH, hM, hS };
+  void face; void rim;
+
+  // Fenster mit Himmel, Jalousie, Fensterbank, Heizkörper, Pflanze
+  const wx = 2.45, wy = 1.82, ww = 1.55, wh = 1.6, wz = ROOM.z0 + 0.01;
+  const skyTex = tex(512, 512, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#9fc3e6'); gr.addColorStop(0.65, '#dbe9f2'); gr.addColorStop(1, '#eef2ec');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,.55)';
+    for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = 60 + Math.random() * 160; for (let k = 0; k < 6; k++) { g.beginPath(); g.ellipse(x + k * 22, y + Math.sin(k) * 8, 34, 16, 0, 0, 7); g.fill(); } }
+    for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(${70 + Math.random() * 30},${110 + Math.random() * 30},${70 + Math.random() * 20},.85)`; g.beginPath(); g.arc(Math.random() * w, h - 40 - Math.random() * 40, 30 + Math.random() * 40, 0, 7); g.fill(); }
+    g.fillStyle = '#8c9a86'; g.fillRect(0, h - 40, w, 40);
+  });
+  mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshBasicMaterial({ map: skyTex }), wx, wy, wz, scene, false);
+  const wf = std(0xf2f0eb, 0.5);
+  box(ww + 0.08, 0.05, 0.06, wf, wx, wy + wh / 2 + 0.02, wz + 0.02, scene, false);
+  box(ww + 0.08, 0.05, 0.06, wf, wx, wy - wh / 2 - 0.02, wz + 0.02, scene, false);
+  box(0.05, wh, 0.06, wf, wx - ww / 2 - 0.02, wy, wz + 0.02, scene, false);
+  box(0.05, wh, 0.06, wf, wx + ww / 2 + 0.02, wy, wz + 0.02, scene, false);
+  box(0.04, wh, 0.05, wf, wx, wy, wz + 0.02, scene, false);
+  box(ww, 0.035, 0.05, wf, wx, wy + 0.25, wz + 0.02, scene, false);
+  const slatMat = std(0xe9e5dc, 0.7, 0.1);
+  for (let i = 0; i < 13; i++) { const s = box(ww - 0.02, 0.004, 0.045, slatMat, wx, wy + wh / 2 - 0.04 - i * 0.032, wz + 0.07, scene, false); s.rotation.x = 0.55; }
+  box(ww - 0.02, 0.03, 0.05, slatMat, wx, wy + wh / 2 - 0.47, wz + 0.07, scene, false);
+  box(ww + 0.18, 0.03, 0.22, std(0xdcd6cb, 0.5), wx, wy - wh / 2 - 0.05, wz + 0.11, scene, true);
+  const radMat = std(0xefece6, 0.45, 0.2);
+  for (let i = 0; i < 16; i++) box(0.045, 0.5, 0.08, radMat, wx - 0.6 + i * 0.08, 0.48, wz + 0.09, scene, false);
+  box(1.3, 0.025, 0.025, radMat, wx, 0.21, wz + 0.09, scene, false);
+  const plant = new THREE.Group(); plant.position.set(wx + 0.52, wy - wh / 2 - 0.035, wz + 0.11); scene.add(plant);
+  mesh(new THREE.CylinderGeometry(0.075, 0.055, 0.13, 24), std(0xb9673f, 0.85), 0, 0.065, 0, plant);
+  mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.01, 24), std(0x3d2d22, 1), 0, 0.125, 0, plant);
+  const leafMat = std(0x4f7d45, 0.65);
+  for (let i = 0; i < 11; i++) {
+    const lf = mesh(new THREE.SphereGeometry(0.05, 12, 8), leafMat, 0, 0, 0, plant);
+    const a = i / 11 * Math.PI * 2, r = 0.05 + (i % 3) * 0.02;
+    lf.scale.set(0.35, 1, 0.12);
+    lf.position.set(Math.cos(a) * r, 0.18 + (i % 4) * 0.04, Math.sin(a) * r);
+    lf.rotation.set(Math.sin(a) * 0.7, -a, Math.cos(a) * 0.7);
+  }
+
+  // Poster (Periodensystem) links an der Rückwand
+  const poster = tex(640, 400, (g, w, h) => {
+    g.fillStyle = '#f7f5ef'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#2b3a4a'; g.font = '600 26px system-ui'; g.fillText('Periodensystem der Elemente', 24, 40);
+    const cols = ['#e8b4a0', '#f1d29a', '#bcd8a8', '#a8c8e0', '#d6c2e4', '#f0e6a8'];
+    const cw = 32, ch = 36, ox = 24, oy = 64;
+    const layout = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) {
+      if (r < 3 && !layout[r].includes(c)) continue;
+      g.fillStyle = cols[c < 2 ? 0 : c < 12 ? 3 : c < 16 ? 2 : c === 16 ? 1 : 4]; g.fillRect(ox + c * (cw + 2), oy + r * (ch + 2), cw, ch);
+    }
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 14; c++) { g.fillStyle = cols[5]; g.fillRect(ox + (c + 3) * (cw + 2), oy + 7.4 * (ch + 2) + r * (ch + 2), cw, ch); }
+  });
+  mesh(new THREE.PlaneGeometry(1.05, 0.66), std(0xffffff, 0.8, 0, { map: poster }), -2.75, 1.75, ROOM.z0 + 0.012, scene, false);
+
+  // Sammlungsschrank an der linken Wand
+  const cab = new THREE.Group(); cab.position.set(ROOM.x0 + 0.26, 0, -0.5); scene.add(cab);
+  const cabMat = std(0xd8d1c2, 0.6);
+  box(0.5, 2.1, 1.3, cabMat, 0, 1.05, 0, cab);
+  const glass = new THREE.MeshStandardMaterial({ color: 0xcfe2ea, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.25 });
+  for (const z of [-0.32, 0.32]) {
+    box(0.02, 1.15, 0.58, glass, 0.26, 1.45, z, cab, false);
+    box(0.02, 0.62, 0.58, cabMat, 0.26, 0.38, z, cab);
+    box(0.03, 0.12, 0.015, MAT.steel, 0.28, 0.85, z > 0 ? 0.05 : -0.05, cab);
+  }
+  box(0.42, 0.015, 1.22, cabMat, 0.02, 1.25, 0, cab);
+  box(0.42, 0.015, 1.22, cabMat, 0.02, 1.62, 0, cab);
+  const bottleCols = [0x7f9fb3, 0x9db08a, 0xc8a46e, 0xb98a8a, 0xa9b6c4];
+  for (let i = 0; i < 9; i++) {
+    const shelfY = i < 5 ? 1.26 : 1.63;
+    const bt = mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.14 + (i % 3) * 0.05, 14), std(bottleCols[i % 5], 0.3, 0.1), 0, 0, 0, cab);
+    bt.position.set(0.05, shelfY + 0.08 + (i % 3) * 0.025, -0.5 + (i % 5) * 0.24 + (i > 4 ? 0.12 : 0));
+  }
+})();
+
+/* Staubteilchen im Fensterlicht (sehr dezent) */
+const motes = (() => {
+  const n = 140, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { pos[i * 3] = 1.6 + Math.random() * 1.7; pos[i * 3 + 1] = 0.9 + Math.random() * 1.8; pos[i * 3 + 2] = -1.7 + Math.random() * 1.2; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.006, transparent: true, opacity: 0.45, depthWrite: false }));
+  scene.add(pts); return pts;
+})();
+
+/* =========================================================
+   Labortisch und Kleinkram
+   ========================================================= */
+const TBL = { x0: -1.55, x1: 0.97, z0: -0.45, z1: 0.45 };
+(function buildTable() {
+  const tw = TBL.x1 - TBL.x0, tcx = (TBL.x0 + TBL.x1) / 2;
+  const topMat = std(0x3e4849, 0.75, 0.05);
+  box(tw, 0.04, TBL.z1 - TBL.z0, topMat, tcx, TABLE_Y - 0.02, 0);
+  box(tw, 0.012, 0.012, std(0x2b3233, 0.5, 0.2), tcx, TABLE_Y - 0.004, TBL.z1, scene, false);
+  const legMat = std(0x9ea4a9, 0.4, 0.7);
+  for (const x of [TBL.x0 + 0.06, TBL.x1 - 0.06]) for (const z of [TBL.z0 + 0.06, TBL.z1 - 0.06]) box(0.05, TABLE_Y - 0.04, 0.05, legMat, x, (TABLE_Y - 0.04) / 2, z);
+  box(tw - 0.12, 0.08, 0.03, legMat, tcx, TABLE_Y - 0.08, TBL.z0 + 0.06);
+  box(tw - 0.12, 0.03, 0.03, legMat, tcx, 0.18, TBL.z0 + 0.06);
+  for (const x of [TBL.x0 + 0.06, TBL.x1 - 0.06]) box(0.03, 0.03, TBL.z1 - TBL.z0 - 0.12, legMat, x, 0.18, 0);
+  // Steckdosenleiste an der Tischhinterkante
+  const strip = new THREE.Group(); strip.position.set(-0.95, TABLE_Y, TBL.z0 + 0.03); scene.add(strip);
+  box(0.62, 0.07, 0.05, std(0xe5e0d5, 0.5), 0, 0.035, 0, strip);
+  for (let i = 0; i < 3; i++) { cylZ(0.016, 0.004, std(0xd2ccbf, 0.5), -0.2 + i * 0.2, 0.035, 0.026, strip); cylZ(0.003, 0.006, MAT.black, -0.207 + i * 0.2, 0.035, 0.027, strip, 8); cylZ(0.003, 0.006, MAT.black, -0.193 + i * 0.2, 0.035, 0.027, strip, 8); }
+  const lamp = mesh(new THREE.SphereGeometry(0.006, 10, 8), new THREE.MeshStandardMaterial({ color: 0xff5544, emissive: 0xff3322, emissiveIntensity: 1.2 }), 0.28, 0.05, 0.026, strip, false);
+  void lamp;
+  // Notizblock mit Stift
+  const padTex = tex(256, 360, (g, w, h) => {
+    g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#b7cbe4'; g.lineWidth = 1.5; for (let y = 50; y < h; y += 18) { g.beginPath(); g.moveTo(10, y); g.lineTo(w - 10, y); g.stroke(); }
+    g.strokeStyle = '#e5a0a0'; g.beginPath(); g.moveTo(34, 0); g.lineTo(34, h); g.stroke();
+    g.fillStyle = '#2f4f8a'; g.font = '22px "Bradley Hand","Segoe Print",cursive'; g.fillText('Messprotokoll', 44, 40);
+    g.font = '15px "Bradley Hand","Segoe Print",cursive';
+    ['s / m    t / s', '0,19    0,63', '0,39    0,91', '0,59    1,12'].forEach((t, i) => g.fillText(t, 44, 82 + i * 18));
+  });
+  const pad = mesh(new THREE.BoxGeometry(0.15, 0.006, 0.21), [MAT.cream, MAT.cream, std(0xffffff, 0.9, 0, { map: padTex }), MAT.cream, MAT.cream, MAT.cream], -0.8, TABLE_Y + 0.003, 0.27);
+  pad.rotation.y = 0.18;
+  const pen = cylX(0.004, 0.14, std(0x2f5f9e, 0.4, 0.2), -0.66, TABLE_Y + 0.004, 0.26); pen.rotation.y = 0.5;
+  // Kästchen mit Massestücken
+  const mb = new THREE.Group(); mb.position.set(0.18, TABLE_Y, 0.3); mb.rotation.y = -0.1; scene.add(mb);
+  box(0.16, 0.025, 0.09, std(0x7b5d3f, 0.7), 0, 0.0125, 0, mb);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+    const d = mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.012 + i * 0.004, 20), MAT.brass, -0.054 + i * 0.036, 0.03 + i * 0.002, -0.022 + j * 0.044, mb);
+    void d;
+  }
+})();
+
+/* =========================================================
+   Luftkissenbahn
+   ========================================================= */
+(function buildTrack() {
+  // Lochmuster für die Dachflächen
+  const holeTex = tex(64, 64, (g, w, h) => {
+    g.fillStyle = '#d0d5da'; g.fillRect(0, 0, w, h);
+    const gr = g.createRadialGradient(32, 32, 1, 32, 32, 6); gr.addColorStop(0, '#2a2d31'); gr.addColorStop(1, 'rgba(42,45,49,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 6, 0, 7); g.fill();
+  });
+  holeTex.wrapS = holeTex.wrapT = THREE.RepeatWrapping; holeTex.repeat.set(L / 0.025, 2);
+  const roofMat = std(0xffffff, 0.3, 0.8, { map: holeTex });
+  const roofW = Math.hypot(0.035, 0.035);
+  const rf = mesh(new THREE.PlaneGeometry(L, roofW), roofMat, 0, BODY_TOP + 0.0175, 0.0175); rf.rotation.x = -Math.PI / 4;
+  const rb = mesh(new THREE.PlaneGeometry(L, roofW), roofMat, 0, BODY_TOP + 0.0175, -0.0175); rb.rotation.x = -3 * Math.PI / 4;
+  box(L, BODY_TOP - RAIL_BASE, 0.07, MAT.alu, 0, (BODY_TOP + RAIL_BASE) / 2, 0);
+  box(L, 0.006, 0.09, MAT.aluDark, 0, RAIL_BASE + 0.003, 0);
+  // Maßstab an der Vorderseite
+  const rulerTex = tex(4096, 96, (g, w, h) => {
+    g.fillStyle = '#efe3a6'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#1b1b1b'; g.font = '600 30px system-ui'; g.textAlign = 'center';
+    for (let i = 0; i <= 200; i++) {
+      const x = Math.min(w - 2, i / 200 * w);
+      const len = i % 10 === 0 ? 46 : i % 5 === 0 ? 32 : 20;
+      g.fillRect(x - 1.5, 0, 3, len);
+      if (i % 10 === 0 && i > 0 && i < 200) g.fillText((i / 100).toFixed(1).replace('.', ','), x, 84);
+    }
+    g.textAlign = 'left'; g.fillText('m', 10, 84);
+  });
+  mesh(new THREE.PlaneGeometry(L, 0.024), std(0xffffff, 0.55, 0, { map: rulerTex }), 0, (BODY_TOP + RAIL_BASE) / 2, 0.0352, scene, false);
+  // Endstücke
+  for (const s of [END_W / 2, L - END_W / 2]) {
+    box(END_W, APEX + 0.003 - RAIL_BASE + 0.01, 0.1, MAT.anod, X0 + s, (APEX + 0.003 + RAIL_BASE - 0.01) / 2, 0);
+    // Gummipuffer
+    const sign = s < 1 ? 1 : -1;
+    cylX(0.006, 0.006, MAT.rubber, X0 + s + sign * (END_W / 2 + 0.002), APEX - 0.012, 0.03);
+    cylX(0.006, 0.006, MAT.rubber, X0 + s + sign * (END_W / 2 + 0.002), APEX - 0.012, -0.03);
+  }
+  // Luftanschluss
+  cylX(0.009, 0.02, MAT.aluDark, X0 - 0.01, 0.985, 0);
+  // Stellfüße
+  for (const s of [0.12, 1.0, 1.88]) {
+    const x = X0 + s;
+    box(0.035, RAIL_BASE - TABLE_Y - 0.02, 0.035, MAT.anod, x, TABLE_Y + 0.02 + (RAIL_BASE - TABLE_Y - 0.02) / 2, 0);
+    box(0.04, 0.014, 0.17, MAT.anod, x, TABLE_Y + 0.02, 0);
+    for (const z of [-0.07, 0.07]) {
+      cylY(0.004, 0.035, MAT.steel, x, TABLE_Y + 0.017, z);
+      cylY(0.011, 0.008, MAT.black, x, TABLE_Y + 0.036, z, scene, 16);
+      cylY(0.008, 0.003, MAT.rubber, x, TABLE_Y + 0.0015, z);
+    }
+  }
+})();
+
+/* =========================================================
+   Gleiter (Wagen)
+   ========================================================= */
+function numberTex(n, col) {
+  return tex(64, 64, (g) => { g.fillStyle = col; g.fillRect(0, 0, 64, 64); g.fillStyle = '#fff'; g.font = '700 46px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n, 32, 35); });
+}
+function makeCart(color, num) {
+  const grp = new THREE.Group(); scene.add(grp);
+  const capMat = std(color, 0.42, 0.3);
+  const pg = new THREE.BoxGeometry(CART_L, 0.004, 0.060);
+  for (const side of [1, -1]) {
+    const m = mesh(pg, MAT.aluCart, 0, BODY_TOP + 0.0175 + 0.0025 - 0.0028, side * (0.0175 + 0.0025 + 0.0028), grp);
+    m.rotation.x = side * Math.PI / 4;
+    // farbiger Streifen an der Seite
+    const st = box(CART_L * 0.9, 0.006, 0.0015, capMat, 0, BODY_TOP + 0.0, side * 0.0405, grp, false);
+    st.rotation.x = side * Math.PI / 4;
+  }
+  box(CART_L * 0.97, 0.012, 0.034, capMat, 0, APEX + 0.009, 0, grp);
+  const lbl = mesh(new THREE.PlaneGeometry(0.022, 0.022), new THREE.MeshStandardMaterial({ map: numberTex(num, '#' + color.toString(16).padStart(6, '0')), roughness: 0.5 }), -0.065, APEX + 0.0152, 0, grp, false);
+  lbl.rotation.x = -Math.PI / 2;
+  // Blende
+  const flag = box(1, 0.065, 0.0025, std(0x151618, 0.55, 0.2), 0, APEX + 0.015 + 0.0325, 0, grp);
+  box(0.03, 0.008, 0.012, MAT.black, 0, APEX + 0.018, 0, grp);
+  // Massenträger und Zusatzmassen (je Seite bis zu 4 Scheiben à 25 g)
+  const discs = [];
+  for (const side of [1, -1]) {
+    cylZ(0.003, 0.034, MAT.steel, 0, 0.998, side * 0.056, grp, 10);
+    for (let k = 0; k < 4; k++) {
+      const d = cylZ(0.016, 0.0045, MAT.steel, 0, 0.998, side * (0.048 + k * 0.0052), grp, 28);
+      discs.push(d);
+    }
+  }
+  // Eisenplättchen hinten (Haltemagnet), Öse vorne (Faden)
+  const iron = box(0.003, 0.02, 0.024, std(0x3a3d41, 0.5, 0.7), -CART_L / 2 - 0.0015, HOOK_Y + 0.002, 0, grp);
+  const hook = mesh(new THREE.TorusGeometry(0.004, 0.0009, 6, 16), MAT.steel, CART_L / 2 + 0.006, HOOK_Y, 0, grp);
+  hook.rotation.y = Math.PI / 2;
+  // Federbügel vorne
+  const spring = new THREE.Group(); grp.add(spring); spring.position.set(CART_L / 2, HOOK_Y, 0);
+  const arc = mesh(new THREE.TorusGeometry(0.02, 0.0011, 6, 28, Math.PI), MAT.steel, 0, 0, 0, spring);
+  arc.rotation.x = Math.PI / 2; arc.rotation.z = -Math.PI / 2; arc.scale.set(1, 1, 1);
+  box(0.004, 0.008, 0.044, MAT.black, 0.001, 0, 0, spring);
+  // Nadel vorne
+  const needle = new THREE.Group(); grp.add(needle); needle.position.set(CART_L / 2, HOOK_Y, 0);
+  box(0.006, 0.012, 0.012, MAT.black, 0.003, 0, 0, needle);
+  const cone = mesh(new THREE.ConeGeometry(0.0016, 0.022, 10), MAT.steel, 0.006 + 0.011, 0, 0, needle); cone.rotation.z = -Math.PI / 2;
+  // Prallplatte hinten
+  const plate = box(0.003, 0.024, 0.044, MAT.aluDark, -CART_L / 2 - 0.0015, HOOK_Y, 0, grp);
+  // Knetbecher hinten
+  const cup = new THREE.Group(); grp.add(cup); cup.position.set(-CART_L / 2, HOOK_Y, 0);
+  const cupM = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.016, 20, 1, true), std(0x9aa3ab, 0.4, 0.7, { side: THREE.DoubleSide }), -0.008, 0, 0, cup); cupM.rotation.z = Math.PI / 2;
+  const knete = mesh(new THREE.SphereGeometry(0.011, 16, 12), std(0x6f9a52, 0.9), -0.012, 0, 0, cup); knete.scale.set(0.7, 1, 1);
+  box(0.004, 0.026, 0.026, MAT.black, -0.0, 0, 0, cup);
+  return { grp, flag, discs, iron, hook, spring, needle, plate, cup, capMat };
+}
+const CARTS = [makeCart(0x2f6db5, '1'), makeCart(0xd0702a, '2')];
+
+/* =========================================================
+   Federstarter, Haltemagnet, Umlenkrolle, Massestück
+   ========================================================= */
+function makeStarter(dir) {
+  // dir = +1: links, schießt nach rechts; −1: rechts
+  const g = new THREE.Group(); scene.add(g);
+  const x0 = dir > 0 ? X0 + END_W / 2 : X0 + L - END_W / 2;
+  g.position.set(x0, 0, 0);
+  box(0.04, 0.026, 0.04, std(0x7f8a95, 0.4, 0.6), -dir * 0.002, HOOK_Y, 0, g);
+  box(0.03, 0.01, 0.03, MAT.anod, -dir * 0.002, APEX + 0.004, 0, g);
+  const knob = cylY(0.006, 0.012, std(0xc0392b, 0.5), -dir * 0.008, HOOK_Y + 0.019, 0, g, 14);
+  const plunger = new THREE.Group(); g.add(plunger);
+  cylX(0.0035, 0.03, MAT.steel, dir * 0.01, HOOK_Y, 0, plunger, 12);
+  cylX(0.008, 0.003, MAT.rubber, dir * 0.0245, HOOK_Y, 0, plunger, 16);
+  // Spiralfeder
+  const coil = new THREE.Group(); g.add(coil); coil.position.set(dir * 0.019, HOOK_Y, 0);
+  const cp = []; for (let i = 0; i <= 200; i++) { const t = i / 200, a = t * Math.PI * 2 * 6; cp.push(new THREE.Vector3(dir * t * 0.012, Math.cos(a) * 0.0055, Math.sin(a) * 0.0055)); }
+  mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 200, 0.0007, 5), MAT.steel, 0, 0, 0, coil);
+  return { g, plunger, coil, knob, dir };
+}
+const STARTER = [makeStarter(1), makeStarter(-1)];
+
+const MAGNET = (() => {
+  const g = new THREE.Group(); scene.add(g); g.position.set(X0 + END_W / 2, 0, 0);
+  box(0.03, 0.012, 0.03, MAT.anod, 0, APEX + 0.005, 0, g);
+  cylX(0.011, 0.026, MAT.copper, 0.004, HOOK_Y + 0.002, 0, g, 24);
+  cylX(0.0125, 0.003, MAT.black, -0.0095, HOOK_Y + 0.002, 0, g, 24);
+  cylX(0.0125, 0.003, MAT.black, 0.0175, HOOK_Y + 0.002, 0, g, 24);
+  const ledMat = new THREE.MeshStandardMaterial({ color: 0x552200, emissive: 0xff8a1f, emissiveIntensity: 0 });
+  mesh(new THREE.SphereGeometry(0.0035, 10, 8), ledMat, -0.004, HOOK_Y + 0.017, 0, g, false);
+  // Kabel zur Steckdosenleiste
+  const c = new THREE.CatmullRomCurve3([new THREE.Vector3(X0 + 0.005, HOOK_Y + 0.004, -0.012), new THREE.Vector3(X0 - 0.03, 1.01, -0.08), new THREE.Vector3(X0 - 0.02, TABLE_Y + 0.003, -0.25), new THREE.Vector3(-1.12, TABLE_Y + 0.003, -0.38), new THREE.Vector3(-0.85, TABLE_Y + 0.03, -0.395)]);
+  const cable = mesh(new THREE.TubeGeometry(c, 60, 0.0022, 6), std(0x9a2a24, 0.6), 0, 0, 0, scene);
+  return { g, ledMat, cable };
+})();
+
+const PULLEY = (() => {
+  const g = new THREE.Group(); scene.add(g);
+  box(0.035, 0.012, 0.03, MAT.anod, X0 + L + 0.008, APEX - 0.004, 0, g);
+  box(0.006, 0.05, 0.004, MAT.anod, PX, AXLE_Y - 0.01, 0.009, g);
+  box(0.006, 0.05, 0.004, MAT.anod, PX, AXLE_Y - 0.01, -0.009, g);
+  box(0.03, 0.006, 0.022, MAT.anod, PX - 0.012, APEX - 0.03, 0, g);
+  const wheel = new THREE.Group(); wheel.position.set(PX, AXLE_Y, 0); g.add(wheel);
+  const disc = mesh(new THREE.CylinderGeometry(PR - 0.002, PR - 0.002, 0.005, 40), std(0xe8e4dc, 0.35, 0.05), 0, 0, 0, wheel); disc.rotation.x = Math.PI / 2;
+  const rimT = mesh(new THREE.TorusGeometry(PR - 0.001, 0.0018, 8, 40), std(0xdedad2, 0.3, 0.1), 0, 0, 0, wheel);
+  void rimT;
+  for (let i = 0; i < 3; i++) { const sp = box(0.003, PR * 1.6, 0.006, std(0x9aa3ab, 0.4, 0.6), 0, 0, 0, wheel); sp.rotation.z = i * Math.PI / 3; }
+  // Markierung, damit das Drehen sichtbar ist
+  box(0.006, 0.006, 0.0062, std(0xc0392b, 0.5), 0, PR * 0.6, 0, wheel);
+  cylZ(0.004, 0.026, MAT.steel, PX, AXLE_Y, 0, g, 12);
+  return { g, wheel };
+})();
+
+const WEIGHT = (() => {
+  const g = new THREE.Group(); scene.add(g);
+  const hook = mesh(new THREE.TorusGeometry(0.004, 0.0009, 6, 16, Math.PI * 1.6), MAT.steel, 0, -0.004, 0, g);
+  hook.rotation.z = Math.PI * 0.7;
+  const rod = cylY(0.0018, 1, MAT.steel, 0, 0, 0, g, 8);
+  const base = cylY(0.013, 0.004, MAT.brass, 0, 0, 0, g, 28);
+  const discs = [];
+  for (let i = 0; i < 9; i++) {
+    const d = cylY(0.013, 0.0038, i % 2 ? std(0xbf9a4c, 0.32, 0.9) : MAT.brass, 0, 0, 0, g, 28);
+    discs.push(d);
+  }
+  return { g, rod, base, discs };
+})();
+function layoutWeight() {
+  const N = weightDiscs(), H = weightH();
+  WEIGHT.rod.scale.y = H - 0.008; WEIGHT.rod.position.y = -0.008 - (H - 0.008) / 2;
+  WEIGHT.base.position.y = -H + 0.002;
+  WEIGHT.discs.forEach((d, i) => { d.visible = i < N; d.position.y = -H + 0.004 + 0.0019 + i * 0.0042; });
+}
+
+const TELLER = (() => {
+  const g = new THREE.Group(); scene.add(g); g.position.set(PX + PR, 0, 0);
+  const plate = cylY(0.032, 0.006, std(0x5c646c, 0.4, 0.6), 0, 0, 0, g, 32);
+  const pad = cylY(0.026, 0.004, std(0x3a3d41, 0.95), 0, 0, 0, g, 28);
+  const rod = cylY(0.005, 1, MAT.steel, 0.045, 0, 0, g, 10);
+  const arm = box(0.045, 0.008, 0.01, MAT.steel, 0.022, 0, 0, g);
+  const muff = box(0.016, 0.02, 0.016, MAT.anod, 0.045, 0, 0, g);
+  const foot = box(0.18, 0.012, 0.03, std(0x30363c, 0.5, 0.5), 0.07, 0.006, 0, g);
+  const foot2 = box(0.03, 0.012, 0.14, std(0x30363c, 0.5, 0.5), 0.045, 0.006, 0, g);
+  void foot; void foot2;
+  return { g, plate, pad, rod, arm, muff };
+})();
+function tellerTop() { return TOP_Y0 - weightH() - P.sa; }
+function layoutTeller() {
+  const y = tellerTop();
+  TELLER.plate.position.y = y - 0.003 - 0.004;
+  TELLER.pad.position.y = y - 0.002;
+  TELLER.arm.position.y = y - 0.008;
+  TELLER.muff.position.y = y - 0.008;
+  const top = y + 0.03;
+  TELLER.rod.scale.y = top; TELLER.rod.position.y = top / 2;
+}
+
+/* Faden als Linie */
+const THREAD_N = 64;
+const threadGeo = new THREE.BufferGeometry();
+threadGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(THREAD_N * 3), 3));
+const thread = new THREE.Line(threadGeo, new THREE.LineBasicMaterial({ color: 0x2b2b2b }));
+scene.add(thread);
+
+/* =========================================================
+   Lichtschranken
+   ========================================================= */
+const GATEOBJ = [];
+function makeGate(i) {
+  const g = new THREE.Group(); scene.add(g);
+  const pm = MAT.plastic;
+  box(0.014, 0.075, 0.022, pm, 0, 1.1075, 0.05, g);
+  box(0.014, 0.075, 0.022, pm, 0, 1.1075, -0.05, g);
+  box(0.016, 0.016, 0.124, pm, 0, 1.153, 0, g);
+  // Sender und Empfänger
+  box(0.008, 0.008, 0.004, MAT.black, 0, 1.09, 0.0375, g, false);
+  box(0.008, 0.008, 0.004, MAT.black, 0, 1.09, -0.0375, g, false);
+  const ledMat = new THREE.MeshStandardMaterial({ color: 0x401010, emissive: 0xff2a1a, emissiveIntensity: 0 });
+  mesh(new THREE.SphereGeometry(0.0036, 12, 8), ledMat, 0, 1.1625, 0.035, g, false);
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.22, depthWrite: false });
+  const beam = cylZ(0.0006, 0.075, beamMat, 0, 1.09, 0, g, 6); beam.castShadow = false;
+  const lblTex = numberTex(String(i + 1), '#2c3542');
+  const lbl = mesh(new THREE.PlaneGeometry(0.012, 0.012), new THREE.MeshStandardMaterial({ map: lblTex, roughness: 0.6 }), 0, 1.12, 0.0612, g, false);
+  void lbl;
+  // Halter: Arm, Doppelmuffe, Stativstange, Fuß
+  box(0.012, 0.012, 0.15, MAT.steel, 0, 1.153, -0.135, g);
+  box(0.026, 0.026, 0.026, MAT.anod, 0, 1.153, -0.21, g);
+  cylY(0.0055, 0.27, MAT.steel, 0, TABLE_Y + 0.135, -0.21, g, 12);
+  cylY(0.035, 0.012, std(0x30363c, 0.5, 0.5), 0, TABLE_Y + 0.006, -0.21, g, 28);
+  let cable = null;
+  return { g, ledMat, beamMat, get cable() { return cable; }, set cable(c) { cable = c; } };
+}
+for (let i = 0; i < 4; i++) GATEOBJ.push(makeGate(i));
+
+/* =========================================================
+   Zählgerät
+   ========================================================= */
+const COUNTER = (() => {
+  const g = new THREE.Group(); g.position.set(0.62, TABLE_Y, 0.27); g.rotation.y = -0.22; scene.add(g);
+  box(0.27, 0.095, 0.15, std(0xe6e2d8, 0.5, 0.05), 0, 0.0475, 0, g);
+  box(0.27, 0.012, 0.15, std(0x5c7d9a, 0.45, 0.1), 0, 0.089, 0, g);
+  const c = document.createElement('canvas'); c.width = 640; c.height = 200;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAXANI;
+  const disp = mesh(new THREE.PlaneGeometry(0.21, 0.0656), new THREE.MeshBasicMaterial({ map: t }), -0.015, 0.05, 0.0752, g, false);
+  void disp;
+  for (let i = 0; i < 3; i++) cylZ(0.006, 0.01, i === 0 ? std(0xc0392b, 0.5) : std(0x2b2f33, 0.5), 0.112, 0.07 - i * 0.022, 0.077, g, 16);
+  const label = tex(256, 32, (x) => { x.fillStyle = '#e6e2d8'; x.fillRect(0, 0, 256, 32); x.fillStyle = '#4a5560'; x.font = '600 18px system-ui'; x.fillText('ZÄHLER · 4 Kanäle', 8, 22); });
+  mesh(new THREE.PlaneGeometry(0.12, 0.015), new THREE.MeshStandardMaterial({ map: label }), -0.06, 0.0115, 0.0752, g, false);
+  for (let i = 0; i < 4; i++) cylZ(0.006, 0.012, std(0x1f2226, 0.5), -0.09 + i * 0.04, 0.05, -0.08, g, 14);
+  for (const x of [-0.12, 0.12]) for (const z of [-0.06, 0.06]) cylY(0.008, 0.004, MAT.rubber, x, 0.002, z, g, 12);
+  return { g, canvas: c, ctx: c.getContext('2d'), tex: t };
+})();
+const counterSocket = (i) => new THREE.Vector3(-0.09 + i * 0.04, 0.05, -0.086).applyMatrix4(COUNTER.g.matrixWorld);
+let counterDirty = true;
+function drawCounter() {
+  const g = COUNTER.ctx, w = 640, h = 200;
+  g.fillStyle = '#121513'; g.fillRect(0, 0, w, h);
+  g.font = '600 22px "Courier New",monospace'; g.fillStyle = '#5a6a60';
+  g.fillText('LS   t / s     Δt / s', 22, 30);
+  g.fillStyle = '#ff5a3c'; g.shadowColor = '#ff3a1c'; g.shadowBlur = 8;
+  g.font = '700 30px "Courier New",monospace';
+  const n = gates().length;
+  for (let i = 0; i < 4; i++) {
+    const y = 64 + i * 36;
+    if (i >= n) { g.fillStyle = '#3a2a26'; g.fillText(`${i + 1}    --,---    -,----`, 22, y); g.fillStyle = '#ff5a3c'; continue; }
+    const ev = [...S.events].reverse().find(e => e.gate === i);
+    const tt = ev ? ev.tOn.toFixed(3).padStart(6, ' ') : ' 0.000';
+    const dt = ev ? ev.dt.toFixed(4) : '0.0000';
+    g.fillText(`${i + 1}  ${tt.replace('.', ',')}    ${dt.replace('.', ',')}`, 22, y);
+  }
+  g.shadowBlur = 0;
+  g.font = '600 22px "Courier New",monospace'; g.fillStyle = S.running ? '#5bd67a' : '#5a6a60';
+  g.fillText(S.running ? '● läuft' : S.done ? 'Halt' : 'bereit', 500, 30);
+  COUNTER.tex.needsUpdate = true;
+}
+
+function rebuildGateCables() {
+  COUNTER.g.updateMatrixWorld(true);
+  const gs = gates();
+  GATEOBJ.forEach((o, i) => {
+    if (o.cable) { scene.remove(o.cable); o.cable.geometry.dispose(); o.cable = null; }
+    if (i >= gs.length) return;
+    const gx = X0 + gs[i];
+    const end = counterSocket(i);
+    const pts = [
+      new THREE.Vector3(gx, 1.153, -0.224),
+      new THREE.Vector3(gx + 0.01, 1.08, -0.25),
+      new THREE.Vector3(gx + 0.02, TABLE_Y + 0.003, -0.27),
+      new THREE.Vector3(gx * 0.55 + end.x * 0.45, TABLE_Y + 0.003, -0.02 - i * 0.02),
+      new THREE.Vector3(end.x - 0.01, TABLE_Y + 0.003, end.z - 0.06),
+      new THREE.Vector3(end.x, end.y, end.z)
+    ];
+    const cable = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 0.0022, 6), std(0x1b1d20, 0.6), 0, 0, 0, scene);
+    o.cable = cable;
+  });
+}
+
+/* =========================================================
+   Gebläse mit Schlauch
+   ========================================================= */
+const BLOWER = (() => {
+  const g = new THREE.Group(); g.position.set(-1.34, TABLE_Y, -0.1); scene.add(g);
+  const bodyMat = std(0x8094a8, 0.5, 0.2);
+  const body = box(0.22, 0.17, 0.22, bodyMat, 0, 0.09, 0, g);
+  box(0.226, 0.012, 0.226, std(0x5e6f80, 0.5, 0.3), 0, 0.18, 0, g);
+  for (const x of [-0.09, 0.09]) for (const z of [-0.09, 0.09]) cylY(0.012, 0.008, MAT.rubber, x, 0.004, z, g, 12);
+  // Gitter vorne mit Lüfterrad
+  const fan = new THREE.Group(); fan.position.set(-0.02, 0.095, 0.111); g.add(fan);
+  mesh(new THREE.CircleGeometry(0.06, 32), std(0x1f2226, 0.8), -0.02, 0.095, 0.1105, g, false);
+  for (let i = 0; i < 6; i++) { const b = box(0.05, 0.016, 0.002, std(0x4b5258, 0.6, 0.3), 0, 0, 0, fan, false); b.geometry.translate(0.027, 0, 0); b.rotation.z = i * Math.PI / 3; b.rotation.x = 0.3; }
+  for (let i = 1; i <= 4; i++) mesh(new THREE.TorusGeometry(0.015 * i, 0.0012, 6, 40), MAT.steel, -0.02, 0.095, 0.115, g, false);
+  for (const a of [0, Math.PI / 2]) { const s = box(0.12, 0.0024, 0.002, MAT.steel, -0.02, 0.095, 0.115, g, false); s.rotation.z = a; }
+  // Schalter
+  const swMat = new THREE.MeshStandardMaterial({ color: 0x7a1d14, emissive: 0xff3b1f, emissiveIntensity: 0, roughness: 0.4 });
+  const sw = box(0.022, 0.03, 0.012, swMat, 0.08, 0.13, 0.114, g);
+  const label = tex(256, 48, (x) => { x.fillStyle = '#8094a8'; x.fillRect(0, 0, 256, 48); x.fillStyle = '#f2f4f6'; x.font = '700 26px system-ui'; x.fillText('GEBLÄSE', 12, 33); });
+  mesh(new THREE.PlaneGeometry(0.1, 0.019), new THREE.MeshStandardMaterial({ map: label, roughness: 0.5 }), 0.04, 0.03, 0.1105, g, false);
+  const regler = cylZ(0.012, 0.012, MAT.black, 0.08, 0.075, 0.116, g, 20);
+  // Auslass
+  cylX(0.016, 0.03, std(0x5e6f80, 0.5, 0.3), 0.125, 0.09, 0, g, 20);
+  // klickbar
+  g.traverse(o => { if (o.isMesh) o.userData.click = 'blower'; });
+  // Schlauch (geriffelt)
+  const ribTex = tex(64, 16, (x) => { for (let i = 0; i < 64; i++) { const v = 40 + 30 * Math.sin(i / 64 * Math.PI * 2); x.fillStyle = `rgb(${v},${v + 2},${v + 5})`; x.fillRect(i, 0, 1, 16); } });
+  ribTex.wrapS = ribTex.wrapT = THREE.RepeatWrapping; ribTex.repeat.set(60, 1);
+  const hosePts = [new THREE.Vector3(-1.2, TABLE_Y + 0.09, -0.1), new THREE.Vector3(-1.13, TABLE_Y + 0.11, -0.08), new THREE.Vector3(-1.07, 1.0, -0.03), new THREE.Vector3(-1.02, 0.985, 0)];
+  const hose = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hosePts), 60, 0.012, 14), std(0xffffff, 0.75, 0.05, { map: ribTex }), 0, 0, 0, scene);
+  // Netzkabel
+  const pc = new THREE.CatmullRomCurve3([new THREE.Vector3(-1.34, TABLE_Y + 0.05, -0.211), new THREE.Vector3(-1.32, TABLE_Y + 0.003, -0.3), new THREE.Vector3(-1.2, TABLE_Y + 0.003, -0.37), new THREE.Vector3(-1.15, TABLE_Y + 0.035, -0.395)]);
+  mesh(new THREE.TubeGeometry(pc, 40, 0.0028, 6), std(0x1b1d20, 0.6), 0, 0, 0, scene);
+  void body; void regler;
+  return { g, fan, swMat, sw, hose };
+})();
+
+/* =========================================================
+   Geräusche (Web Audio)
+   ========================================================= */
+let AC = null, blowerGain = null;
+function audioInit() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const n = AC.sampleRate * 2, buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+    let last = 0; for (let i = 0; i < n; i++) { const wv = Math.random() * 2 - 1; last = (last + 0.02 * wv) / 1.02; d[i] = last * 3.2; }
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
+    const hum = AC.createOscillator(); hum.type = 'sawtooth'; hum.frequency.value = 118;
+    const humF = AC.createBiquadFilter(); humF.type = 'lowpass'; humF.frequency.value = 300;
+    const humG = AC.createGain(); humG.gain.value = 0.05;
+    blowerGain = AC.createGain(); blowerGain.gain.value = 0;
+    src.connect(lp).connect(blowerGain);
+    hum.connect(humF).connect(humG).connect(blowerGain);
+    blowerGain.connect(AC.destination);
+    src.start(); hum.start();
+  } catch (e) { AC = null; }
+}
+function blowerSound(p) { if (AC && blowerGain) blowerGain.gain.setTargetAtTime(P.sound ? p * 0.16 : 0, AC.currentTime, 0.08); }
+function sfx(type) {
+  if (!AC || !P.sound) return;
+  const t = AC.currentTime;
+  const cfg = { el: [2600, 0.05, 0.35, 'bandpass'], inel: [380, 0.09, 0.5, 'lowpass'], launch: [1500, 0.04, 0.3, 'bandpass'], magnet: [900, 0.03, 0.25, 'bandpass'], land: [220, 0.12, 0.55, 'lowpass'], end: [700, 0.06, 0.3, 'bandpass'] }[type];
+  if (!cfg) return;
+  const n = Math.floor(AC.sampleRate * cfg[1]), buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+  const s = AC.createBufferSource(); s.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = cfg[3]; f.frequency.value = cfg[0]; f.Q.value = 2;
+  const gn = AC.createGain(); gn.gain.value = cfg[2];
+  s.connect(f).connect(gn).connect(AC.destination); s.start(t);
+  if (type === 'el') { const o = AC.createOscillator(); o.frequency.value = 1900; const og = AC.createGain(); og.gain.setValueAtTime(0.06, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.25); o.connect(og).connect(AC.destination); o.start(t); o.stop(t + 0.26); }
+}
+
+/* =========================================================
+   Physik
+   ========================================================= */
+const zugMode = () => P.mode === 'bew' && P.drive === 'zug';
+const activeCarts = () => P.mode === 'bew' ? [0] : [0, 1];
+function muK() { const p = S.p; return 0.2 * Math.pow(1 - p, 3) + (P.ideal ? 0 : 0.0002) * p; }
+
+function freeMove(c, h, mu) {
+  if (c.v !== 0) {
+    const dv = mu * G * h;
+    if (Math.abs(c.v) <= dv) c.v = 0; else c.v -= Math.sign(c.v) * dv;
+  }
+  c.s += c.v * h;
+}
+
+function step(h) {
+  const t0 = S.t, prev = [S.c[0].s, S.c[1].s];
+  const mu = muK(), muS = mu * 1.3;
+  const [c1, c2] = S.c;
+  const M1 = m1(), M2 = m2();
+  S.stuck = false;
+
+  if (zugMode() && !S.w.caught) {
+    const F = P.mh * G;
+    if (Math.abs(c1.v) < 1e-9 && F <= muS * M1 * G) { c1.v = 0; S.stuck = true; }
+    else {
+      const a = (F - Math.sign(c1.v || 1) * mu * M1 * G) / (M1 + P.mh);
+      c1.v += a * h; c1.s += c1.v * h;
+    }
+    S.w.d = c1.s - c1.s0;
+    if (S.w.d >= P.sa) { S.w.d = P.sa; S.w.caught = true; sfx('land'); }
+  } else if (S.coupled) {
+    freeMove(c1, h, mu); c2.v = c1.v; c2.s = c1.s + CONTACT;
+  } else {
+    for (const i of activeCarts()) freeMove(S.c[i], h, mu);
+  }
+
+  // Stoß der Wagen
+  if (P.mode === 'stoss' && !S.coupled && c2.s - c1.s <= CONTACT && c1.v > c2.v) {
+    const v1 = c1.v, v2 = c2.v, P0 = M1 * v1 + M2 * v2;
+    if (P.coll === 'el') {
+      const e = P.ideal ? 1 : 0.96;
+      c1.v = (P0 - M2 * e * (v1 - v2)) / (M1 + M2);
+      c2.v = (P0 + M1 * e * (v1 - v2)) / (M1 + M2);
+      const mid = (c1.s + c2.s) / 2; c1.s = mid - CONTACT / 2; c2.s = mid + CONTACT / 2;
+      sfx('el');
+    } else {
+      c1.v = c2.v = P0 / (M1 + M2); S.coupled = true; c2.s = c1.s + CONTACT;
+      sfx('inel');
+    }
+    if (S.tColl === null) { S.tColl = t0 + h; S.vAfter = [c1.v, c2.v]; }
+  }
+
+  // Enden der Bahn
+  if (S.coupled) {
+    if (c1.s < SMIN && c1.v < 0) { c1.s = SMIN; c1.v = c2.v = -c1.v * E_END; c2.s = c1.s + CONTACT; sfx('end'); }
+    if (c2.s > SMAX && c2.v > 0) { c2.s = SMAX; c1.v = c2.v = -c2.v * E_END; c1.s = c2.s - CONTACT; sfx('end'); }
+  } else {
+    for (const i of activeCarts()) {
+      const c = S.c[i];
+      if (c.s < SMIN && c.v < 0) { c.s = SMIN; c.v = -c.v * E_END; if (Math.abs(c.v) > 0.03) sfx('end'); }
+      if (c.s > SMAX && c.v > 0) {
+        c.s = SMAX;
+        if (zugMode()) c.v = 0; else c.v = -c.v * E_END;
+        if (Math.abs(c.v) > 0.03 || zugMode()) sfx('end');
+      }
+    }
+  }
+
+  S.t = t0 + h;
+
+  // Lichtschranken
+  const gs = gates(), b = P.b;
+  for (const ci of activeCarts()) {
+    const c = S.c[ci], sp = prev[ci], ds = c.s - sp;
+    for (let gi = 0; gi < gs.length; gi++) {
+      const gp = gs[gi];
+      const cov = Math.abs(c.s - gp) <= b / 2;
+      const was = !!S.cov[ci][gi];
+      if (cov && !was && ds !== 0) {
+        const edge = ds > 0 ? gp - b / 2 : gp + b / 2;
+        const fr = Math.min(1, Math.max(0, (edge - sp) / ds));
+        S.open[ci][gi] = { gate: gi, cart: ci, tOn: t0 + fr * h, dir: Math.sign(ds) };
+      } else if (!cov && was) {
+        const ev = S.open[ci][gi];
+        if (ev && ds !== 0) {
+          const edge = ds > 0 ? gp + b / 2 : gp - b / 2;
+          const fr = Math.min(1, Math.max(0, (edge - sp) / ds));
+          ev.tOff = t0 + fr * h; ev.dt = ev.tOff - ev.tOn; ev.v = ev.dir * b / ev.dt;
+          S.events.push(ev); onGateEvent();
+        }
+        S.open[ci][gi] = null;
+      }
+      S.cov[ci][gi] = cov;
+    }
+  }
+
+  // Ende des Laufs erkennen
+  const moving = activeCarts().some(i => Math.abs(S.c[i].v) > 1e-6) || (zugMode() && !S.w.caught && !S.stuck);
+  S.still = moving ? 0 : S.still + h;
+  if (S.still > 0.4 || S.t > 40) finishRun();
+}
+
+/* =========================================================
+   Ablaufsteuerung
+   ========================================================= */
+function resetRun() {
+  S.t = 0; S.running = false; S.paused = false; S.done = false; S.released = false;
+  S.w = { d: 0, caught: false }; S.coupled = false; S.tColl = null; S.vAfter = null;
+  S.events = []; S.open = [[], []]; S.still = 0; S.launchT = -1; S.launchT2 = -1;
+  S.c[0].s = S.c[0].s0 = SMIN; S.c[0].v = 0;
+  if (P.mode === 'stoss') { S.c[1].s = S.c[1].s0 = P.w2 === 'ruht' ? P.s2 : SMAX; }
+  else { S.c[1].s = S.c[1].s0 = 1.0; }
+  S.c[1].v = 0;
+  S.vInit = [0, 0];
+  const gs = gates();
+  S.cov = [0, 1].map(ci => gs.map(gp => Math.abs(S.c[ci].s - gp) <= P.b / 2));
+  counterDirty = true;
+  updateRunUI(); renderRunTable();
+}
+function startRun() {
+  audioInit();
+  if (S.running) return;
+  if (S.done || S.released) resetRun();
+  S.released = true; S.running = true; S.paused = false;
+  if (zugMode()) { sfx('magnet'); }
+  else {
+    S.c[0].v = Math.sqrt(2 * FEDER_E[(P.mode === 'bew' ? P.f0 : P.f1) - 1] / m1());
+    S.launchT = 0; sfx('launch');
+    if (P.mode === 'stoss' && P.w2 === 'entgegen') { S.c[1].v = -Math.sqrt(2 * FEDER_E[P.f2 - 1] / m2()); S.launchT2 = 0; }
+  }
+  S.vInit = [S.c[0].v, S.c[1].v];
+  if (S.p < 0.6) toast('Das Gebläse ist aus. Der Wagen liegt auf der Schiene auf und wird stark gebremst.');
+  counterDirty = true; updateRunUI();
+}
+function finishRun() {
+  if (!S.running) return;
+  S.running = false; S.done = true; counterDirty = true; updateRunUI();
+  if (S.events.length === 0) {
+    if (S.stuck || S.p < 0.6) toast('Der Wagen bewegt sich nicht. Schalte zuerst das Gebläse ein.');
+    else toast('Keine Lichtschranke wurde durchfahren. Prüfe die Positionen.');
+  }
+}
+function onGateEvent() { counterDirty = true; runTableDirty = true; }
+
+/* =========================================================
+   Darstellung pro Bild
+   ========================================================= */
+function applySetup() {
+  const bew = P.mode === 'bew', zug = zugMode();
+  MAGNET.g.visible = zug; MAGNET.cable.visible = zug;
+  STARTER[0].g.visible = !zug;
+  STARTER[1].g.visible = P.mode === 'stoss' && P.w2 === 'entgegen';
+  PULLEY.g.visible = zug; WEIGHT.g.visible = zug; TELLER.g.visible = zug; thread.visible = zug;
+  const [k1, k2] = CARTS;
+  k1.hook.visible = zug; k1.iron.visible = zug;
+  k1.spring.visible = !bew && P.coll === 'el';
+  k1.needle.visible = !bew && P.coll === 'inel';
+  k2.plate.visible = !bew && P.coll === 'el';
+  k2.cup.visible = !bew && P.coll === 'inel';
+  k2.hook.visible = false; k2.iron.visible = false; k2.spring.visible = false; k2.needle.visible = false;
+  for (const k of CARTS) k.flag.scale.x = P.b;
+  const ex1 = Math.round((m1() - M_CART) / 0.05), ex2 = Math.round((m2() - M_CART) / 0.05);
+  k1.discs.forEach((d, i) => d.visible = (i % 4) < ex1);
+  k2.discs.forEach((d, i) => d.visible = (i % 4) < (bew ? 0 : ex2));
+  const gs = gates();
+  GATEOBJ.forEach((o, i) => { o.g.visible = i < gs.length; if (i < gs.length) o.g.position.x = X0 + gs[i]; });
+  layoutWeight(); layoutTeller();
+  rebuildGateCables();
+  counterDirty = true;
+}
+
+function updateScene(rdt, now) {
+  const lift = S.p * 0.0022;
+  const [k1, k2] = CARTS;
+  k1.grp.position.set(X0 + S.c[0].s, lift, 0);
+  if (P.mode === 'bew') {
+    // Wagen 2 steht geparkt auf dem Tisch
+    k2.grp.position.set(-0.3, TABLE_Y - 0.994, 0.31); k2.grp.rotation.y = 0.12;
+  } else { k2.grp.position.set(X0 + S.c[1].s, lift, 0); k2.grp.rotation.y = 0; }
+
+  // Lichtschranken-LEDs
+  const gs = gates();
+  GATEOBJ.forEach((o, i) => {
+    if (i >= gs.length) return;
+    const blocked = activeCarts().some(ci => Math.abs(S.c[ci].s - gs[i]) <= P.b / 2);
+    o.ledMat.emissiveIntensity = blocked ? 2.6 : 0.15;
+    o.beamMat.opacity = blocked ? 0.0 : 0.22;
+  });
+
+  // Massestück, Rolle, Faden
+  if (zugMode()) {
+    const wy = TOP_Y0 - S.w.d;
+    WEIGHT.g.position.set(PX + PR, wy, 0);
+    PULLEY.wheel.rotation.z = -S.w.d / PR;
+    const pos = threadGeo.attributes.position.array;
+    const hx = X0 + S.c[0].s + CART_L / 2 + 0.01, hy = HOOK_Y + lift;
+    const slack = Math.max(0, (S.c[0].s - S.c[0].s0) - S.w.d);
+    const pts = [];
+    const nH = 24, nA = 12, nV = THREAD_N - nH - nA;
+    const hLen = PX - hx;
+    for (let i = 0; i < nH; i++) { const t = i / (nH - 1); const sag = Math.min(0.006, slack * 0.3) * Math.sin(Math.PI * t); pts.push([hx + t * hLen, hy + (HOOK_Y - hy) * t - sag]); }
+    for (let i = 0; i < nA; i++) { const a = Math.PI / 2 - (i / (nA - 1)) * Math.PI / 2; pts.push([PX + PR * Math.cos(a), AXLE_Y + PR * Math.sin(a)]); }
+    const vTop = AXLE_Y, vBot = wy;
+    for (let i = 0; i < nV; i++) { const t = i / (nV - 1); const bow = Math.min(0.05, slack * 0.6) * Math.sin(Math.PI * t); pts.push([PX + PR + bow, vTop + (vBot - vTop) * t]); }
+    for (let i = 0; i < THREAD_N; i++) { pos[i * 3] = pts[i][0]; pos[i * 3 + 1] = pts[i][1]; pos[i * 3 + 2] = 0; }
+    threadGeo.attributes.position.needsUpdate = true;
+    threadGeo.computeBoundingSphere();
+    MAGNET.ledMat.emissiveIntensity = S.released ? 0 : 2.2;
+  }
+
+  // Federstarter-Stößel
+  const plungerOff = (t) => t < 0 ? 0 : t < 0.03 ? (t / 0.03) * 0.014 : Math.max(0, 0.014 - (t - 0.03) * 0.03);
+  const tl = S.launchT >= 0 ? S.t : -1;
+  STARTER[0].plunger.position.x = STARTER[0].dir * plungerOff(tl);
+  STARTER[0].coil.scale.x = 1 + plungerOff(tl) / 0.012;
+  STARTER[0].knob.position.y = HOOK_Y + 0.019 - (tl >= 0 && tl < 0.25 ? 0.004 : 0);
+  const tl2 = S.launchT2 >= 0 ? S.t : -1;
+  STARTER[1].plunger.position.x = STARTER[1].dir * plungerOff(tl2);
+  STARTER[1].coil.scale.x = 1 + plungerOff(tl2) / 0.012;
+
+  // Gebläse
+  BLOWER.fan.rotation.z -= rdt * S.p * 60;
+  BLOWER.swMat.emissiveIntensity = S.blower ? 1.8 : 0;
+  BLOWER.g.position.y = TABLE_Y + Math.sin(now * 0.09) * 0.00025 * S.p;
+  BLOWER.hose.position.y = Math.sin(now * 0.05) * 0.0004 * S.p;
+
+  // Uhr
+  const d = new Date(), sec = d.getSeconds() + d.getMilliseconds() / 1000, min = d.getMinutes() + sec / 60, hr = (d.getHours() % 12) + min / 60;
+  window.__clock.hS.rotation.z = -sec / 60 * Math.PI * 2;
+  window.__clock.hM.rotation.z = -min / 60 * Math.PI * 2;
+  window.__clock.hH.rotation.z = -hr / 12 * Math.PI * 2;
+
+  // Staub
+  const mp = motes.geometry.attributes.position.array;
+  for (let i = 0; i < mp.length; i += 3) {
+    mp[i + 1] += Math.sin(now * 0.0003 + i) * 0.00012 - 0.00004;
+    mp[i] += Math.cos(now * 0.0002 + i * 0.7) * 0.00008;
+    if (mp[i + 1] < 0.9) mp[i + 1] = 2.7;
+  }
+  motes.geometry.attributes.position.needsUpdate = true;
+}
+
+/* =========================================================
+   Kamera
+   ========================================================= */
+const CAMS = {
+  total: { pos: [0.12, 1.45, 1.75], tgt: [0.02, 0.99, 0] },
+  side: { pos: [0.0, 1.12, 1.35], tgt: [0.0, 1.04, 0] },
+  pulley: { pos: [1.75, 1.3, 0.95], tgt: [0.95, 0.78, 0] }
+};
+let camMode = 'total', camTween = null, lastFollowX = null;
+function setCam(name) {
+  camMode = name;
+  document.querySelectorAll('#camBar button').forEach(b => b.setAttribute('aria-pressed', b.dataset.cam === name));
+  if (name === 'follow') {
+    const x = X0 + S.c[0].s;
+    camTween = { pos: new THREE.Vector3(x + 0.05, 1.14, 0.75), tgt: new THREE.Vector3(x + 0.05, 1.04, 0) };
+    lastFollowX = x;
+  } else {
+    const c = CAMS[name];
+    camTween = { pos: new THREE.Vector3(...c.pos), tgt: new THREE.Vector3(...c.tgt) };
+  }
+}
+controls.addEventListener('start', () => { camTween = null; });
+function updateCamera(rdt) {
+  if (camMode === 'follow') {
+    const x = X0 + S.c[0].s;
+    if (lastFollowX !== null) { const dx = x - lastFollowX; camera.position.x += dx; controls.target.x += dx; if (camTween) { camTween.pos.x += dx; camTween.tgt.x += dx; } }
+    lastFollowX = x;
+  }
+  if (camTween) {
+    const k = 1 - Math.exp(-rdt * 4);
+    camera.position.lerp(camTween.pos, k); controls.target.lerp(camTween.tgt, k);
+    if (camera.position.distanceTo(camTween.pos) < 0.002) camTween = null;
+  }
+  controls.update();
+  camera.position.x = Math.min(ROOM.x1 - 0.2, Math.max(ROOM.x0 + 0.2, camera.position.x));
+  camera.position.y = Math.min(ROOM.h - 0.2, Math.max(0.15, camera.position.y));
+  camera.position.z = Math.min(ROOM.z1 - 0.2, Math.max(ROOM.z0 + 0.2, camera.position.z));
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.fov = w / h < 0.8 ? 72 : w / h < 1.2 ? 52 : 38;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+/* Klick auf das Gebläse */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let downXY = null;
+function pick(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(BLOWER.g, true)[0];
+  return hit ? 'blower' : null;
+}
+canvas.addEventListener('pointerdown', e => { downXY = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!downXY || Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]) > 5) return;
+  if (pick(e) === 'blower') toggleBlower();
+});
+canvas.addEventListener('pointermove', e => { if (e.buttons) return; canvas.style.cursor = pick(e) ? 'pointer' : 'grab'; });
+
+/* =========================================================
+   Hauptschleife
+   ========================================================= */
+let last = performance.now(), hudT = 0;
+function frame(now) {
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  const target = S.blower ? 1 : 0;
+  S.p += (target - S.p) * (1 - Math.exp(-rdt / (S.blower ? 0.6 : 1.0)));
+  if (Math.abs(target - S.p) < 1e-4) S.p = target;
+  blowerSound(S.p);
+
+  if (S.running && !S.paused) {
+    const simDt = rdt * P.speed;
+    const n = Math.max(1, Math.ceil(simDt / 0.0002)), hh = simDt / n;
+    for (let i = 0; i < n && S.running; i++) step(hh);
+  }
+  updateScene(rdt, now);
+  updateCamera(rdt);
+
+  hudT += rdt;
+  if (hudT > 0.05) {
+    hudT = 0;
+    document.getElementById('chipT').textContent = 't = ' + nf(S.t, 3) + ' s';
+    document.getElementById('meter').style.width = (S.p * 100).toFixed(0) + '%';
+    if (S.running) counterDirty = true;
+  }
+  if (counterDirty) { drawCounter(); counterDirty = false; }
+  if (runTableDirty) { renderRunTable(); runTableDirty = false; }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* =========================================================
+   Oberfläche
+   ========================================================= */
+const $ = id => document.getElementById(id);
+function nf(x, d = 3) { if (x === null || x === undefined || !isFinite(x)) return '–'; const s = x.toFixed(d).replace('.', ','); return s.startsWith('-') && Number(x.toFixed(d)) !== 0 ? '−' + s.slice(1) : s.replace('-', ''); }
+let toastTimer = null;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3600); }
+
+function toggleBlower() {
+  audioInit();
+  S.blower = !S.blower;
+  $('btnBlower').classList.toggle('on', S.blower);
+  $('blowerTxt').textContent = S.blower ? 'Gebläse ausschalten' : 'Gebläse einschalten';
+  $('chipBlower').classList.toggle('on', S.blower);
+  $('chipBlower').querySelector('span').textContent = S.blower ? 'Gebläse an' : 'Gebläse aus';
+}
+$('btnBlower').addEventListener('click', toggleBlower);
+
+function bindSeg(id, get, set) {
+  const el = $(id);
+  const sync = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(get()))));
+  el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); sync(); });
+  sync(); return sync;
+}
+function bindRange(id, outId, get, set, fmt, onChange = setupChanged) {
+  const r = $(id), o = $(outId);
+  r.value = get(); o.textContent = fmt(get());
+  r.addEventListener('input', () => { set(Number(r.value)); o.textContent = fmt(get()); onChange(); });
+}
+
+function setupChanged() { resetRun(); applySetup(); updatePanels(); }
+
+bindSeg('segMode', () => P.mode, v => { P.mode = v; buildGateRows(); syncN(); setupChanged(); });
+bindSeg('segDrive', () => P.drive, v => { P.drive = v; setupChanged(); });
+bindSeg('segColl', () => P.coll, v => { P.coll = v; setupChanged(); });
+bindSeg('segW2', () => P.w2, v => { P.w2 = v; setupChanged(); });
+const syncN = bindSeg('segN', () => P.mode === 'bew' ? P.nBew : P.nSto, v => { if (P.mode === 'bew') P.nBew = +v; else P.nSto = +v; buildGateRows(); setupChanged(); });
+
+const gFmt = v => nf(v, 0) + ' g';
+bindRange('rMh', 'oMh', () => P.mh * 1000, v => P.mh = v / 1000, gFmt);
+bindRange('rSa', 'oSa', () => P.sa, v => P.sa = v, v => nf(v, 2) + ' m');
+bindRange('rF0', 'oF0', () => P.f0, v => P.f0 = v, v => String(v));
+bindRange('rM1b', 'oM1b', () => P.m1b * 1000, v => P.m1b = v / 1000, gFmt);
+bindRange('rM1s', 'oM1s', () => P.m1s * 1000, v => P.m1s = v / 1000, gFmt);
+bindRange('rF1', 'oF1', () => P.f1, v => P.f1 = v, v => String(v));
+bindRange('rM2', 'oM2', () => P.m2 * 1000, v => P.m2 = v / 1000, gFmt);
+bindRange('rS2', 'oS2', () => P.s2, v => P.s2 = v, v => nf(v, 2) + ' m');
+bindRange('rF2', 'oF2', () => P.f2, v => P.f2 = v, v => String(v));
+
+$('selB').addEventListener('change', e => { P.b = Number(e.target.value); setupChanged(); });
+$('cbIdeal').addEventListener('change', e => { P.ideal = e.target.checked; });
+$('cbSound').addEventListener('change', e => { P.sound = e.target.checked; if (P.sound) audioInit(); });
+$('selSpeed').addEventListener('change', e => { P.speed = Number(e.target.value); });
+$('btnStart').addEventListener('click', startRun);
+$('btnReset').addEventListener('click', () => { resetRun(); });
+$('btnPause').addEventListener('click', () => { if (!S.running) return; S.paused = !S.paused; updateRunUI(); });
+document.querySelectorAll('#camBar button').forEach(b => b.addEventListener('click', () => setCam(b.dataset.cam)));
+
+function buildGateRows() {
+  const wrap = $('gateRows'); wrap.innerHTML = '';
+  const arr = P.mode === 'bew' ? P.gatesBew : P.gatesSto, n = P.mode === 'bew' ? P.nBew : P.nSto;
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<label for="rG${i}">Lichtschranke ${i + 1} bei <output id="oG${i}"></output></label><input type="range" id="rG${i}" min="0.20" max="1.80" step="0.01">`;
+    wrap.appendChild(row);
+    const r = row.querySelector('input'), o = row.querySelector('output');
+    r.value = arr[i]; o.textContent = nf(arr[i], 2) + ' m';
+    r.addEventListener('input', () => {
+      arr[i] = Number(r.value); o.textContent = nf(arr[i], 2) + ' m';
+      GATEOBJ[i].g.position.x = X0 + arr[i];
+      if (!S.running) { const gs = gates(); S.cov = [0, 1].map(ci => gs.map(gp => Math.abs(S.c[ci].s - gp) <= P.b / 2)); }
+      clearTimeout(buildGateRows.t); buildGateRows.t = setTimeout(rebuildGateCables, 60);
+    });
+  }
+}
+
+function updatePanels() {
+  const bew = P.mode === 'bew';
+  $('optBew').hidden = !bew; $('optStoss').hidden = bew;
+  $('zugOpts').hidden = P.drive !== 'zug'; $('federOpts1').hidden = P.drive !== 'feder';
+  $('rowS2').hidden = P.w2 !== 'ruht'; $('rowF2').hidden = P.w2 !== 'entgegen';
+  $('hM1b').textContent = 'Wagenmasse m_W = ' + nf(m1() * 1000, 0) + ' g' + (P.drive === 'zug' ? ' · a (Theorie) = ' + nf(aTheo(), 3) + ' m/s²' : '');
+  $('hSa').textContent = P.sa >= 0.85 ? 'Das Massestück fällt bis auf den Boden (0,85 m).' : 'Nach ' + nf(P.sa, 2) + ' m setzt das Massestück auf. Danach fährt der Wagen gleichförmig.';
+  $('btnStart').textContent = zugMode() ? 'Haltemagnet lösen' : 'Federstarter auslösen';
+}
+const aTheo = () => P.mh * G / (m1() + P.mh);
+
+function updateRunUI() {
+  $('chipState').textContent = S.running ? (S.paused ? 'pausiert' : 'Messung läuft') : S.done ? 'Lauf beendet' : 'bereit';
+  $('btnPause').textContent = S.paused ? 'Weiter' : 'Pause';
+  $('btnPause').disabled = !S.running;
+}
+
+/* ---------- Tabelle des aktuellen Laufs ---------- */
+let runTableDirty = false;
+function renderRunTable() {
+  const tb = $('runTable');
+  const evs = [...S.events].sort((a, b) => a.tOn - b.tOn);
+  if (!evs.length) {
+    tb.innerHTML = '';
+    $('runNote').innerHTML = `<span class="empty">Noch keine Messwerte. Blendenbreite b = ${nf(P.b * 100, 1)} cm.</span>`;
+    return;
+  }
+  let html = '<thead><tr><th>Ereignis</th><th class="l">Wagen</th><th>Lichtschranke</th><th>t in s</th><th>Δt in s</th><th>v = b/Δt in m/s</th><th class="l">Richtung</th></tr></thead><tbody>';
+  let collShown = false;
+  evs.forEach((e, i) => {
+    if (S.tColl !== null && !collShown && e.tOn > S.tColl) { html += `<tr class="marker"><td colspan="7">Stoß bei t = ${nf(S.tColl, 3)} s</td></tr>`; collShown = true; }
+    html += `<tr><td>${i + 1}</td><td class="l"><span class="tag${e.cart + 1}"></span>Wagen ${e.cart + 1}</td><td>LS ${e.gate + 1}</td><td>${nf(e.tOn, 3)}</td><td>${nf(e.dt, 4)}</td><td>${nf(Math.abs(e.v), 3)}</td><td class="l">${e.dir > 0 ? 'nach rechts →' : '← nach links'}</td></tr>`;
+  });
+  if (S.tColl !== null && !collShown) html += `<tr class="marker"><td colspan="7">Stoß bei t = ${nf(S.tColl, 3)} s</td></tr>`;
+  tb.innerHTML = html + '</tbody>';
+  $('runNote').textContent = `Blendenbreite b = ${nf(P.b * 100, 1)} cm. t ist der Zeitpunkt, an dem die Blende den Lichtstrahl erreicht.`;
+}
+
+/* =========================================================
+   Messprotokoll
+   ========================================================= */
+const STORE = 'lkb-protokoll-v1';
+let PROTO = { bew: [], stoss: [], series: [], nr: 1, nrS: 1 };
+try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.bew && s.stoss) PROTO = Object.assign(PROTO, s); } catch (e) { }
+function saveProto() { try { localStorage.setItem(STORE, JSON.stringify(PROTO)); } catch (e) { } }
+let protoTab = 'bew';
+
+function seriesFor() {
+  const parts = [];
+  if (P.drive === 'zug') parts.push(`Zugmasse ${nf(P.mh * 1000, 0)} g`, `Wagen ${nf(m1() * 1000, 0)} g`, P.sa >= 0.85 ? 'ohne Abfangteller' : `Abfangen nach ${nf(P.sa, 2)} m`);
+  else parts.push(`Federstarter Stufe ${P.f0}`, `Wagen ${nf(m1() * 1000, 0)} g`);
+  parts.push(`b = ${nf(P.b * 100, 1)} cm`);
+  if (P.ideal) parts.push('ideale Bahn');
+  const key = parts.join(' · ');
+  let s = PROTO.series.find(x => x.key === key);
+  if (!s) { s = { id: PROTO.series.length + 1, key, zug: P.drive === 'zug', aTheo: P.drive === 'zug' ? aTheo() : null, sa: P.sa }; PROTO.series.push(s); }
+  return s;
+}
+
+function takeMeasurement() {
+  if (!S.events.length) { toast('Es gibt noch keine Messwerte. Führe zuerst einen Versuch durch.'); return; }
+  if (P.mode === 'bew') {
+    const gs = gates(), s0 = S.c[0].s0 + P.b / 2;
+    const ser = seriesFor();
+    let n = 0;
+    gs.forEach((gp, gi) => {
+      const ev = S.events.find(e => e.cart === 0 && e.gate === gi && e.dir > 0);
+      if (!ev) return;
+      PROTO.bew.push({ nr: PROTO.nr++, ser: ser.id, ls: gi + 1, s: gp - s0, t: ev.tOn, dt: ev.dt, v: P.b / ev.dt });
+      n++;
+    });
+    if (!n) { toast('Keine Lichtschranke wurde in Fahrtrichtung durchfahren.'); return; }
+    saveProto(); protoTab = 'bew'; syncProtoTab(); renderProto();
+    $('selSeries').value = String(ser.id); renderChart();
+    toast(`${n} Messwert${n > 1 ? 'e' : ''} übernommen (Reihe R${ser.id}).`);
+  } else {
+    const r = collisionResult();
+    if (r.err) { toast(r.err); return; }
+    PROTO.stoss.push({ nr: PROTO.nrS++, art: P.coll, m1: m1(), m2: m2(), v1: r.v[0], v2: r.v[1], v1n: r.vn[0], v2n: r.vn[1], ideal: P.ideal });
+    saveProto(); protoTab = 'stoss'; syncProtoTab(); renderProto();
+    toast('Stoßversuch übernommen.');
+  }
+}
+$('btnTake').addEventListener('click', takeMeasurement);
+
+function collisionResult() {
+  if (S.tColl === null) return { err: 'Es hat noch kein Stoß stattgefunden.' };
+  const v = [null, null], vn = [null, null];
+  for (const ci of [0, 1]) {
+    const evs = S.events.filter(e => e.cart === ci).sort((a, b) => a.tOn - b.tOn);
+    const before = evs.filter(e => e.tOff <= S.tColl).pop();
+    v[ci] = before ? before.v : (Math.abs(S.vInit[ci]) < 1e-9 ? 0 : null);
+    // beim unelastischen Stoß fahren beide Wagen gemeinsam: erste Messung nach dem Stoß gilt für beide
+    const after = S.coupled ? S.events.filter(e => e.tOn >= S.tColl).sort((a, b) => a.tOn - b.tOn)[0] : evs.find(e => e.tOn >= S.tColl);
+    // ein Wagen, der nach dem Stoß fast stillsteht, erreicht keine Lichtschranke: v' = 0
+    vn[ci] = after ? after.v : (S.vAfter && Math.abs(S.vAfter[ci]) < 0.02 ? 0 : null);
+  }
+  const miss = [];
+  if (v[0] === null) miss.push('Wagen 1 vor dem Stoß');
+  if (v[1] === null) miss.push('Wagen 2 vor dem Stoß');
+  if (vn[0] === null) miss.push('Wagen 1 nach dem Stoß');
+  if (vn[1] === null) miss.push('Wagen 2 nach dem Stoß');
+  if (miss.length) return { err: 'Es fehlt eine Messung für: ' + miss.join(', ') + '. Stelle die Lichtschranken so auf, dass jeder Wagen vor und nach dem Stoß eine durchfährt.' };
+  return { v, vn };
+}
+
+function syncProtoTab() {
+  document.querySelectorAll('#segProto button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === protoTab)));
+  $('ctlBew').hidden = protoTab !== 'bew'; $('ctlStoss').hidden = protoTab !== 'stoss';
+}
+$('segProto').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; protoTab = b.dataset.v; syncProtoTab(); renderProto(); });
+
+function renderProto() {
+  const tb = $('protoTable'), lg = $('legend');
+  if (protoTab === 'bew') {
+    if (!PROTO.bew.length) { tb.innerHTML = '<tbody><tr><td class="empty">Noch keine Einträge. Führe einen Versuch durch und klicke auf „In Messprotokoll übernehmen“.</td></tr></tbody>'; lg.innerHTML = ''; }
+    else {
+      let h = '<thead><tr><th>Nr.</th><th>Reihe</th><th>LS</th><th>s in m</th><th>t in s</th><th>Δt in s</th><th>v in m/s</th><th>s/t² in m/s²</th><th></th></tr></thead><tbody>';
+      for (const r of PROTO.bew) h += `<tr><td>${r.nr}</td><td>R${r.ser}</td><td>${r.ls}</td><td>${nf(r.s, 3)}</td><td>${nf(r.t, 3)}</td><td>${nf(r.dt, 4)}</td><td>${nf(r.v, 3)}</td><td>${nf(r.s / (r.t * r.t), 3)}</td><td><button class="del" data-del="${r.nr}" title="Zeile löschen" aria-label="Zeile löschen">×</button></td></tr>`;
+      tb.innerHTML = h + '</tbody>';
+      const used = new Set(PROTO.bew.map(r => r.ser));
+      lg.innerHTML = PROTO.series.filter(s => used.has(s.id)).map(s => `<div><b>R${s.id}</b>: ${s.key}${s.aTheo ? ` · a<sub>Theorie</sub> = ${nf(s.aTheo, 3)} m/s²` : ''}</div>`).join('');
+    }
+    fillSeriesSelect();
+  } else {
+    if (!PROTO.stoss.length) { tb.innerHTML = '<tbody><tr><td class="empty">Noch keine Stoßversuche im Protokoll.</td></tr></tbody>'; lg.innerHTML = ''; }
+    else {
+      let h = '<thead><tr><th>Nr.</th><th class="l">Stoß</th><th>m₁ in g</th><th>m₂ in g</th><th>v₁ in m/s</th><th>v₂ in m/s</th><th>v₁\' in m/s</th><th>v₂\' in m/s</th><th>p vorher in kg·m/s</th><th>p nachher in kg·m/s</th><th>Abw.</th><th>E vorher in mJ</th><th>E nachher in mJ</th><th></th></tr></thead><tbody>';
+      for (const r of PROTO.stoss) {
+        const d = derive(r);
+        h += `<tr><td>${r.nr}</td><td class="l">${r.art === 'el' ? 'elastisch' : 'unelastisch'}</td><td>${nf(r.m1 * 1000, 0)}</td><td>${nf(r.m2 * 1000, 0)}</td><td>${nf(r.v1, 3)}</td><td>${nf(r.v2, 3)}</td><td>${nf(r.v1n, 3)}</td><td>${nf(r.v2n, 3)}</td><td>${nf(d.p, 4)}</td><td>${nf(d.pn, 4)}</td><td>${d.dp === null ? '–' : nf(d.dp, 1) + ' %'}</td><td>${nf(d.e * 1000, 2)}</td><td>${nf(d.en * 1000, 2)}</td><td><button class="del" data-dels="${r.nr}" title="Zeile löschen" aria-label="Zeile löschen">×</button></td></tr>`;
+      }
+      tb.innerHTML = h + '</tbody>';
+      lg.innerHTML = '<div>Geschwindigkeiten nach rechts positiv, nach links negativ. p = m₁v₁ + m₂v₂, E = ½m₁v₁² + ½m₂v₂².</div>';
+    }
+  }
+  renderChart();
+}
+function derive(r) {
+  const p = r.m1 * r.v1 + r.m2 * r.v2, pn = r.m1 * r.v1n + r.m2 * r.v2n;
+  const e = 0.5 * r.m1 * r.v1 ** 2 + 0.5 * r.m2 * r.v2 ** 2, en = 0.5 * r.m1 * r.v1n ** 2 + 0.5 * r.m2 * r.v2n ** 2;
+  return { p, pn, e, en, dp: Math.abs(p) > 1e-6 ? (pn - p) / Math.abs(p) * 100 : null };
+}
+$('protoTable').addEventListener('click', e => {
+  const b = e.target.closest('button.del'); if (!b) return;
+  if (b.dataset.del) PROTO.bew = PROTO.bew.filter(r => r.nr !== +b.dataset.del);
+  if (b.dataset.dels) PROTO.stoss = PROTO.stoss.filter(r => r.nr !== +b.dataset.dels);
+  saveProto(); renderProto();
+});
+$('btnClear').addEventListener('click', () => {
+  const which = protoTab === 'bew' ? 'Bewegung' : 'Stoß';
+  if (!confirm(`Alle Einträge im Protokoll „${which}“ löschen?`)) return;
+  if (protoTab === 'bew') { PROTO.bew = []; PROTO.series = []; PROTO.nr = 1; } else { PROTO.stoss = []; PROTO.nrS = 1; }
+  saveProto(); renderProto();
+});
+$('btnCsv').addEventListener('click', () => {
+  const c = x => (typeof x === 'number' ? String(x).replace('.', ',') : `"${String(x).replace(/"/g, '""')}"`);
+  let rows;
+  if (protoTab === 'bew') {
+    rows = [['Nr', 'Reihe', 'Einstellungen', 'Lichtschranke', 's in m', 't in s', 'Delta t in s', 'v in m/s']];
+    for (const r of PROTO.bew) { const s = PROTO.series.find(x => x.id === r.ser); rows.push([r.nr, 'R' + r.ser, s ? s.key : '', r.ls, +r.s.toFixed(4), +r.t.toFixed(4), +r.dt.toFixed(5), +r.v.toFixed(4)]); }
+  } else {
+    rows = [['Nr', 'Stoss', 'm1 in kg', 'm2 in kg', 'v1 in m/s', 'v2 in m/s', "v1' in m/s", "v2' in m/s", 'p vorher', 'p nachher', 'E vorher in J', 'E nachher in J']];
+    for (const r of PROTO.stoss) { const d = derive(r); rows.push([r.nr, r.art === 'el' ? 'elastisch' : 'unelastisch', r.m1, r.m2, +r.v1.toFixed(4), +r.v2.toFixed(4), +r.v1n.toFixed(4), +r.v2n.toFixed(4), +d.p.toFixed(5), +d.pn.toFixed(5), +d.e.toFixed(6), +d.en.toFixed(6)]); }
+  }
+  const csv = '﻿' + rows.map(r => r.map(c).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = protoTab === 'bew' ? 'messprotokoll-bewegung.csv' : 'messprotokoll-stoss.csv';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+/* ---------- Diagramme ---------- */
+function fillSeriesSelect() {
+  const sel = $('selSeries'), cur = sel.value;
+  const used = [...new Set(PROTO.bew.map(r => r.ser))];
+  sel.innerHTML = used.length ? used.map(id => `<option value="${id}">Reihe R${id}</option>`).join('') : '<option value="">keine Reihe</option>';
+  if (used.includes(+cur)) sel.value = cur; else if (used.length) sel.value = String(used[used.length - 1]);
+}
+const FITS = { st: [['par', 'Parabel s = ½·a·t²'], ['lin0', 'Ursprungsgerade s = v·t'], ['none', 'ohne Ausgleichskurve']], vt: [['lin', 'Ausgleichsgerade v = a·t + v₀'], ['none', 'ohne Ausgleichskurve']], st2: [['lin0', 'Ursprungsgerade'], ['none', 'ohne Ausgleichskurve']] };
+function fillFit() {
+  const dia = $('selDia').value, sel = $('selFit');
+  const ser = PROTO.series.find(s => s.id === +$('selSeries').value);
+  sel.innerHTML = FITS[dia].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  if (dia === 'st') sel.value = ser && ser.zug && ser.sa >= 0.85 ? 'par' : ser && !ser.zug ? 'lin0' : 'par';
+}
+$('selSeries').addEventListener('change', () => { fillFit(); renderChart(); });
+$('selDia').addEventListener('change', () => { fillFit(); renderChart(); });
+$('selFit').addEventListener('change', renderChart);
+$('selStossDia').addEventListener('change', renderChart);
+
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p; return 10 * p; }
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function prepCanvas() {
+  const cv = $('chart'), dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+function axes(g, w, h, xMax, yMax, xLabel, yLabel, yMin = 0) {
+  const L0 = 58, R = 16, T = 14, B = 44;
+  const X = x => L0 + x / xMax * (w - L0 - R), Y = y => h - B - (y - yMin) / (yMax - yMin) * (h - T - B);
+  g.font = '12px system-ui'; g.strokeStyle = css('--grid'); g.fillStyle = css('--muted'); g.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const xv = xMax * i / 5, yv = yMin + (yMax - yMin) * i / 5;
+    g.beginPath(); g.moveTo(X(xv), T); g.lineTo(X(xv), h - B); g.stroke();
+    g.beginPath(); g.moveTo(L0, Y(yv)); g.lineTo(w - R, Y(yv)); g.stroke();
+    g.textAlign = 'center'; g.fillText(nf(xv, xMax < 1 ? 2 : xMax < 10 ? 1 : 0), X(xv), h - B + 16);
+    g.textAlign = 'right'; g.fillText(nf(yv, (yMax - yMin) < 1 ? 2 : 1), L0 - 6, Y(yv) + 4);
+  }
+  g.strokeStyle = css('--axis'); g.beginPath(); g.moveTo(L0, T); g.lineTo(L0, h - B); g.lineTo(w - R, h - B); g.stroke();
+  if (yMin < 0) { g.beginPath(); g.moveTo(L0, Y(0)); g.lineTo(w - R, Y(0)); g.stroke(); }
+  g.fillStyle = css('--ink'); g.textAlign = 'center'; g.font = '13px system-ui';
+  g.fillText(xLabel, L0 + (w - L0 - R) / 2, h - 8);
+  g.save(); g.translate(14, T + (h - T - B) / 2); g.rotate(-Math.PI / 2); g.fillText(yLabel, 0, 0); g.restore();
+  return { X, Y };
+}
+function renderChart() {
+  const out = $('fitOut');
+  const { g, w, h } = prepCanvas();
+  if (protoTab === 'bew') {
+    if (!$('selFit').options.length) fillFit();
+    const sid = +$('selSeries').value, rows = PROTO.bew.filter(r => r.ser === sid);
+    const ser = PROTO.series.find(s => s.id === sid);
+    const dia = $('selDia').value, fit = $('selFit').value;
+    if (!rows.length) { g.fillStyle = css('--muted'); g.font = '14px system-ui'; g.textAlign = 'center'; g.fillText('Hier erscheint das Diagramm zur gewählten Messreihe.', w / 2, h / 2); out.textContent = ''; return; }
+    let pts, xl, yl;
+    if (dia === 'st') { pts = rows.map(r => [r.t, r.s]); xl = 't in s'; yl = 's in m'; }
+    else if (dia === 'vt') { pts = rows.map(r => [r.t + r.dt / 2, r.v]); xl = 't in s (Mitte der Dunkelzeit)'; yl = 'v in m/s'; }
+    else { pts = rows.map(r => [r.t * r.t, r.s]); xl = 't² in s²'; yl = 's in m'; }
+    const xMax = niceMax(Math.max(...pts.map(p => p[0])) * 1.1), yMax = niceMax(Math.max(...pts.map(p => p[1])) * 1.1);
+    const { X, Y } = axes(g, w, h, xMax, yMax, xl, yl);
+    let curve = null, txt = '';
+    const n = pts.length;
+    if (fit !== 'none' && n >= 2) {
+      if (fit === 'par') { const k = pts.reduce((a, p) => a + p[1] * p[0] ** 2, 0) / pts.reduce((a, p) => a + p[0] ** 4, 0); curve = x => k * x * x; txt = `Ausgleichsparabel: s = ${nf(k, 4)} m/s² · t²  ⇒  a = 2 · ${nf(k, 4)} m/s² = <b>${nf(2 * k, 3)} m/s²</b>`; }
+      else if (fit === 'lin0') { const k = pts.reduce((a, p) => a + p[0] * p[1], 0) / pts.reduce((a, p) => a + p[0] ** 2, 0); curve = x => k * x; txt = dia === 'st2' ? `Steigung = ${nf(k, 4)} m/s² = a/2  ⇒  a = <b>${nf(2 * k, 3)} m/s²</b>` : `Steigung: v = <b>${nf(k, 3)} m/s</b>`; }
+      else if (fit === 'lin') {
+        const mx = pts.reduce((a, p) => a + p[0], 0) / n, my = pts.reduce((a, p) => a + p[1], 0) / n;
+        const sxy = pts.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0), sxx = pts.reduce((a, p) => a + (p[0] - mx) ** 2, 0);
+        const k = sxx > 0 ? sxy / sxx : 0, d = my - k * mx; curve = x => k * x + d;
+        txt = `Ausgleichsgerade: Steigung a = <b>${nf(k, 3)} m/s²</b>, Achsenabschnitt v₀ = ${nf(d, 3)} m/s`;
+      }
+    } else if (fit !== 'none') txt = 'Für eine Ausgleichskurve brauchst du mindestens zwei Messwerte.';
+    if (ser && ser.aTheo) txt += (txt ? '<br>' : '') + `Theorie ohne Reibung: a = m<sub>Z</sub>·g / (m<sub>W</sub> + m<sub>Z</sub>) = ${nf(ser.aTheo, 3)} m/s²` + (ser.sa < 0.85 ? ` (gilt nur bis s = ${nf(ser.sa, 2)} m)` : '');
+    if (curve) {
+      g.strokeStyle = css('--c2'); g.lineWidth = 2; g.beginPath();
+      for (let i = 0; i <= 120; i++) { const x = xMax * i / 120, y = curve(x); if (y < 0 || y > yMax) { g.stroke(); g.beginPath(); continue; } i === 0 || g.lineTo === undefined ? g.moveTo(X(x), Y(y)) : g.lineTo(X(x), Y(y)); }
+      g.stroke();
+    }
+    g.fillStyle = css('--c1');
+    for (const p of pts) { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 4.5, 0, 7); g.fill(); }
+    out.innerHTML = txt;
+  } else {
+    const rows = PROTO.stoss;
+    if (!rows.length) { g.fillStyle = css('--muted'); g.font = '14px system-ui'; g.textAlign = 'center'; g.fillText('Hier erscheint die Bilanz der Stoßversuche.', w / 2, h / 2); out.textContent = ''; return; }
+    const kind = $('selStossDia').value;
+    const vals = rows.map(r => { const d = derive(r); return kind === 'p' ? [d.p, d.pn] : [d.e * 1000, d.en * 1000]; });
+    const lo = Math.min(0, ...vals.flat()), hi = Math.max(...vals.flat());
+    const yMax = niceMax(hi * 1.15), yMin = lo < 0 ? -niceMax(-lo * 1.15) : 0;
+    const L0 = 58, R = 16;
+    const { Y } = axes(g, w, h, 1, yMax, 'Versuch Nr.', kind === 'p' ? 'p in kg·m/s' : 'E in mJ', yMin);
+    const slot = (w - L0 - R) / rows.length, bw = Math.min(28, slot * 0.32);
+    g.fillStyle = css('--surface'); g.fillRect(L0 - 2, h - 43, w - L0, 20);
+    rows.forEach((r, i) => {
+      const cx = L0 + slot * (i + 0.5);
+      [[vals[i][0], css('--c1'), -1], [vals[i][1], css('--c2'), 1]].forEach(([v, col, s]) => {
+        g.fillStyle = col; const y0 = Y(0), y1 = Y(v);
+        g.fillRect(cx + (s < 0 ? -bw - 2 : 2), Math.min(y0, y1), bw, Math.abs(y1 - y0));
+      });
+      g.fillStyle = css('--muted'); g.textAlign = 'center'; g.font = '12px system-ui';
+      g.fillText(`${r.nr} (${r.art === 'el' ? 'el.' : 'unel.'})`, cx, h - 28);
+    });
+    g.font = '13px system-ui'; g.textAlign = 'left';
+    g.fillStyle = css('--c1'); g.fillRect(w - 190, 18, 12, 12); g.fillStyle = css('--ink'); g.fillText('vorher', w - 172, 28);
+    g.fillStyle = css('--c2'); g.fillRect(w - 110, 18, 12, 12); g.fillStyle = css('--ink'); g.fillText('nachher', w - 92, 28);
+    const el = rows.filter(r => r.art === 'el').map(derive), inel = rows.filter(r => r.art === 'inel').map(derive);
+    const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+    let t = [];
+    if (kind === 'p') t.push('Gesamtimpuls vorher und nachher im Vergleich. Kleine Abweichungen entstehen durch Restreibung und Messung.');
+    else {
+      if (el.length) t.push(`Elastisch: nachher im Mittel ${nf(avg(el.map(d => d.en / d.e * 100)), 0)} % der Bewegungsenergie.`);
+      if (inel.length) t.push(`Unelastisch: nachher im Mittel ${nf(avg(inel.map(d => d.en / d.e * 100)), 0)} % der Bewegungsenergie.`);
+    }
+    out.innerHTML = t.join('<br>');
+  }
+}
+new ResizeObserver(() => renderChart()).observe($('chart'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderChart);
+
+/* =========================================================
+   Start
+   ========================================================= */
+buildGateRows();
+applySetup();
+updatePanels();
+resetRun();
+syncProtoTab();
+renderProto();
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
