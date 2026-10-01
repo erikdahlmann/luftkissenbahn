@@ -369,13 +369,13 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.02, 40);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 30);
 camera.position.set(0.12, 1.45, 1.75);
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0.02, 0.99, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 0.25;
+controls.minDistance = 0.3;
 controls.maxDistance = 4.5;
 controls.maxPolarAngle = Math.PI * 0.53;
 
@@ -614,7 +614,7 @@ const TBL = { x0: -1.55, x1: 0.97, z0: -0.45, z1: 0.45 };
   const tw = TBL.x1 - TBL.x0, tcx = (TBL.x0 + TBL.x1) / 2;
   const topMat = std(0x3e4849, 0.75, 0.05);
   box(tw, 0.04, TBL.z1 - TBL.z0, topMat, tcx, TABLE_Y - 0.02, 0);
-  box(tw, 0.012, 0.012, std(0x2b3233, 0.5, 0.2), tcx, TABLE_Y - 0.004, TBL.z1, scene, false);
+  box(tw + 0.006, 0.014, 0.014, std(0x2b3233, 0.5, 0.2), tcx, TABLE_Y - 0.005, TBL.z1, scene, false);
   const legMat = std(0x9ea4a9, 0.4, 0.7);
   for (const x of [TBL.x0 + 0.06, TBL.x1 - 0.06]) for (const z of [TBL.z0 + 0.06, TBL.z1 - 0.06]) box(0.05, TABLE_Y - 0.04, 0.05, legMat, x, (TABLE_Y - 0.04) / 2, z);
   box(tw - 0.12, 0.08, 0.03, legMat, tcx, TABLE_Y - 0.08, TBL.z0 + 0.06);
@@ -663,7 +663,7 @@ const TBL = { x0: -1.55, x1: 0.97, z0: -0.45, z1: 0.45 };
   const rf = mesh(new THREE.PlaneGeometry(L, roofW), roofMat, 0, BODY_TOP + 0.0175, 0.0175); rf.rotation.x = -Math.PI / 4;
   const rb = mesh(new THREE.PlaneGeometry(L, roofW), roofMat, 0, BODY_TOP + 0.0175, -0.0175); rb.rotation.x = -3 * Math.PI / 4;
   box(L, BODY_TOP - RAIL_BASE, 0.07, MAT.alu, 0, (BODY_TOP + RAIL_BASE) / 2, 0);
-  box(L, 0.006, 0.09, MAT.aluDark, 0, RAIL_BASE + 0.003, 0);
+  box(L - 0.004, 0.006, 0.09, MAT.aluDark, 0, RAIL_BASE + 0.0031, 0);
   // Maßstab an der Vorderseite
   const rulerTex = tex(4096, 96, (g, w, h) => {
     g.fillStyle = '#efe3a6'; g.fillRect(0, 0, w, h);
@@ -676,10 +676,10 @@ const TBL = { x0: -1.55, x1: 0.97, z0: -0.45, z1: 0.45 };
     }
     g.textAlign = 'left'; g.fillText('m', 10, 84);
   });
-  mesh(new THREE.PlaneGeometry(L, 0.024), std(0xffffff, 0.55, 0, { map: rulerTex }), 0, (BODY_TOP + RAIL_BASE) / 2, 0.0352, scene, false);
+  mesh(new THREE.PlaneGeometry(L, 0.024), std(0xffffff, 0.55, 0, { map: rulerTex }), 0, (BODY_TOP + RAIL_BASE) / 2, 0.0362, scene, false);
   // Endstücke
   for (const s of [END_W / 2, L - END_W / 2]) {
-    box(END_W, APEX + 0.003 - RAIL_BASE + 0.01, 0.1, MAT.anod, X0 + s, (APEX + 0.003 + RAIL_BASE - 0.01) / 2, 0);
+    box(END_W + 0.003, APEX + 0.003 - RAIL_BASE + 0.01, 0.1, MAT.anod, X0 + s + (s < 1 ? -0.0015 : 0.0015), (APEX + 0.003 + RAIL_BASE - 0.01) / 2, 0);
     // Gummipuffer
     const sign = s < 1 ? 1 : -1;
     cylX(0.006, 0.006, MAT.rubber, X0 + s + sign * (END_W / 2 + 0.002), APEX - 0.012, 0.03);
@@ -714,11 +714,11 @@ function makeCart(color, num) {
     const m = mesh(pg, MAT.aluCart, 0, BODY_TOP + 0.0175 + 0.0025 - 0.0028, side * (0.0175 + 0.0025 + 0.0028), grp);
     m.rotation.x = side * Math.PI / 4;
     // farbiger Streifen an der Seite
-    const st = box(CART_L * 0.9, 0.006, 0.0015, capMat, 0, BODY_TOP + 0.0, side * 0.0405, grp, false);
+    const st = box(CART_L * 0.9, 0.001, 0.009, capMat, 0, m.position.y + 0.0021 * 0.7071 - 0.016 * 0.7071, m.position.z + side * (0.0021 * 0.7071 + 0.016 * 0.7071), grp, false);
     st.rotation.x = side * Math.PI / 4;
   }
   box(CART_L * 0.97, 0.012, 0.034, capMat, 0, APEX + 0.009, 0, grp);
-  const lbl = mesh(new THREE.PlaneGeometry(0.022, 0.022), new THREE.MeshStandardMaterial({ map: numberTex(num, '#' + color.toString(16).padStart(6, '0')), roughness: 0.5 }), -0.065, APEX + 0.0152, 0, grp, false);
+  const lbl = mesh(new THREE.PlaneGeometry(0.022, 0.022), new THREE.MeshStandardMaterial({ map: numberTex(num, '#' + color.toString(16).padStart(6, '0')), roughness: 0.5 }), -0.065, APEX + 0.0162, 0, grp, false);
   lbl.rotation.x = -Math.PI / 2;
   // Blende
   const flag = box(1, 0.065, 0.0025, std(0x151618, 0.55, 0.2), 0, APEX + 0.015 + 0.0325, 0, grp);
@@ -877,7 +877,7 @@ function makeGate(i) {
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.22, depthWrite: false });
   const beam = cylZ(0.0006, 0.075, beamMat, 0, 1.09, 0, g, 6); beam.castShadow = false;
   const lblTex = numberTex(String(i + 1), '#2c3542');
-  const lbl = mesh(new THREE.PlaneGeometry(0.012, 0.012), new THREE.MeshStandardMaterial({ map: lblTex, roughness: 0.6 }), 0, 1.12, 0.0612, g, false);
+  const lbl = mesh(new THREE.PlaneGeometry(0.012, 0.012), new THREE.MeshStandardMaterial({ map: lblTex, roughness: 0.6 }), 0, 1.12, 0.0622, g, false);
   void lbl;
   // Halter: Arm, Doppelmuffe, Stativstange, Fuß
   box(0.012, 0.012, 0.15, MAT.steel, 0, 1.153, -0.135, g);
@@ -895,14 +895,15 @@ for (let i = 0; i < 4; i++) GATEOBJ.push(makeGate(i));
 const COUNTER = (() => {
   const g = new THREE.Group(); g.position.set(0.62, TABLE_Y, 0.27); g.rotation.y = -0.22; scene.add(g);
   box(0.27, 0.095, 0.15, std(0xe6e2d8, 0.5, 0.05), 0, 0.0475, 0, g);
-  box(0.27, 0.012, 0.15, std(0x5c7d9a, 0.45, 0.1), 0, 0.089, 0, g);
+  box(0.274, 0.014, 0.154, std(0x5c7d9a, 0.45, 0.1), 0, 0.096, 0, g);
   const c = document.createElement('canvas'); c.width = 640; c.height = 200;
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAXANI;
-  const disp = mesh(new THREE.PlaneGeometry(0.21, 0.0656), new THREE.MeshBasicMaterial({ map: t }), -0.015, 0.05, 0.0752, g, false);
+  box(0.218, 0.0716, 0.002, std(0x2a2e33, 0.5, 0.2), -0.015, 0.05, 0.0755, g, false);
+  const disp = mesh(new THREE.PlaneGeometry(0.21, 0.0656), new THREE.MeshBasicMaterial({ map: t }), -0.015, 0.05, 0.0772, g, false);
   void disp;
   for (let i = 0; i < 3; i++) cylZ(0.006, 0.01, i === 0 ? std(0xc0392b, 0.5) : std(0x2b2f33, 0.5), 0.112, 0.07 - i * 0.022, 0.077, g, 16);
   const label = tex(256, 32, (x) => { x.fillStyle = '#e6e2d8'; x.fillRect(0, 0, 256, 32); x.fillStyle = '#4a5560'; x.font = '600 18px system-ui'; x.fillText('ZÄHLER · 4 Kanäle', 8, 22); });
-  mesh(new THREE.PlaneGeometry(0.12, 0.015), new THREE.MeshStandardMaterial({ map: label }), -0.06, 0.0115, 0.0752, g, false);
+  mesh(new THREE.PlaneGeometry(0.072, 0.009), new THREE.MeshStandardMaterial({ map: label }), -0.08, 0.0072, 0.0758, g, false);
   for (let i = 0; i < 4; i++) cylZ(0.006, 0.012, std(0x1f2226, 0.5), -0.09 + i * 0.04, 0.05, -0.08, g, 14);
   for (const x of [-0.12, 0.12]) for (const z of [-0.06, 0.06]) cylY(0.008, 0.004, MAT.rubber, x, 0.002, z, g, 12);
   return { g, canvas: c, ctx: c.getContext('2d'), tex: t };
@@ -913,21 +914,22 @@ function drawCounter() {
   const g = COUNTER.ctx, w = 640, h = 200;
   g.fillStyle = '#121513'; g.fillRect(0, 0, w, h);
   g.font = '600 22px "Courier New",monospace'; g.fillStyle = '#5a6a60';
-  g.fillText('LS   t / s     Δt / s', 22, 30);
+  g.fillText('LS', 22, 30); g.fillText('t / s', 150, 30); g.fillText('Δt / s', 360, 30);
   g.fillStyle = '#ff5a3c'; g.shadowColor = '#ff3a1c'; g.shadowBlur = 8;
-  g.font = '700 30px "Courier New",monospace';
+  g.font = '700 34px "Courier New",monospace';
   const n = gates().length;
   for (let i = 0; i < 4; i++) {
     const y = 64 + i * 36;
-    if (i >= n) { g.fillStyle = '#3a2a26'; g.fillText(`${i + 1}    --,---    -,----`, 22, y); g.fillStyle = '#ff5a3c'; continue; }
+    if (i >= n) { g.fillStyle = '#3a2a26'; g.fillText(String(i + 1), 22, y); g.fillText('--,---', 150, y); g.fillText('-,----', 360, y); g.fillStyle = '#ff5a3c'; continue; }
     const ev = [...S.events].reverse().find(e => e.gate === i);
-    const tt = ev ? ev.tOn.toFixed(3).padStart(6, ' ') : ' 0.000';
+    const tt = ev ? ev.tOn.toFixed(3) : '0.000';
     const dt = ev ? ev.dt.toFixed(4) : '0.0000';
-    g.fillText(`${i + 1}  ${tt.replace('.', ',')}    ${dt.replace('.', ',')}`, 22, y);
+    g.fillText(String(i + 1), 22, y);
+    g.textAlign = 'right'; g.fillText(tt.replace('.', ','), 290, y); g.fillText(dt.replace('.', ','), 500, y); g.textAlign = 'left';
   }
   g.shadowBlur = 0;
   g.font = '600 22px "Courier New",monospace'; g.fillStyle = S.running ? '#5bd67a' : '#5a6a60';
-  g.fillText(S.running ? '● läuft' : S.done ? 'Halt' : 'bereit', 500, 30);
+  g.textAlign = 'right'; g.fillText(S.running ? '● läuft' : S.done ? 'Halt' : 'bereit', 620, 30); g.textAlign = 'left';
   COUNTER.tex.needsUpdate = true;
 }
 
@@ -963,7 +965,7 @@ const BLOWER = (() => {
   for (const x of [-0.09, 0.09]) for (const z of [-0.09, 0.09]) cylY(0.012, 0.008, MAT.rubber, x, 0.004, z, g, 12);
   // Gitter vorne mit Lüfterrad
   const fan = new THREE.Group(); fan.position.set(-0.02, 0.095, 0.111); g.add(fan);
-  mesh(new THREE.CircleGeometry(0.06, 32), std(0x1f2226, 0.8), -0.02, 0.095, 0.1105, g, false);
+  mesh(new THREE.CircleGeometry(0.06, 32), std(0x1f2226, 0.8), -0.02, 0.095, 0.1115, g, false);
   for (let i = 0; i < 6; i++) { const b = box(0.05, 0.016, 0.002, std(0x4b5258, 0.6, 0.3), 0, 0, 0, fan, false); b.geometry.translate(0.027, 0, 0); b.rotation.z = i * Math.PI / 3; b.rotation.x = 0.3; }
   for (let i = 1; i <= 4; i++) mesh(new THREE.TorusGeometry(0.015 * i, 0.0012, 6, 40), MAT.steel, -0.02, 0.095, 0.115, g, false);
   for (const a of [0, Math.PI / 2]) { const s = box(0.12, 0.0024, 0.002, MAT.steel, -0.02, 0.095, 0.115, g, false); s.rotation.z = a; }
@@ -971,7 +973,7 @@ const BLOWER = (() => {
   const swMat = new THREE.MeshStandardMaterial({ color: 0x7a1d14, emissive: 0xff3b1f, emissiveIntensity: 0, roughness: 0.4 });
   const sw = box(0.022, 0.03, 0.012, swMat, 0.08, 0.13, 0.114, g);
   const label = tex(256, 48, (x) => { x.fillStyle = '#8094a8'; x.fillRect(0, 0, 256, 48); x.fillStyle = '#f2f4f6'; x.font = '700 26px system-ui'; x.fillText('GEBLÄSE', 12, 33); });
-  mesh(new THREE.PlaneGeometry(0.1, 0.019), new THREE.MeshStandardMaterial({ map: label, roughness: 0.5 }), 0.04, 0.03, 0.1105, g, false);
+  mesh(new THREE.PlaneGeometry(0.1, 0.019), new THREE.MeshStandardMaterial({ map: label, roughness: 0.5 }), 0.04, 0.03, 0.1115, g, false);
   const regler = cylZ(0.012, 0.012, MAT.black, 0.08, 0.075, 0.116, g, 20);
   // Auslass
   cylX(0.016, 0.03, std(0x5e6f80, 0.5, 0.3), 0.125, 0.09, 0, g, 20);
