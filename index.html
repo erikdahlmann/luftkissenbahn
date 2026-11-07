@@ -50,6 +50,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:16p
 .chip{background:rgba(255,253,249,.88);color:#1d2329;border-radius:999px;padding:4px 11px;font-size:13px;backdrop-filter:blur(6px);display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:#9aa0a6}
 .chip.on .dot{background:#22a35a;box-shadow:0 0 0 3px rgba(34,163,90,.2)}
+.vrBtn{position:absolute;top:10px;right:10px;border:0;border-radius:10px;padding:10px 16px;background:#1f9d58;color:#fff;font-weight:600;font-size:15px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .camBar{position:absolute;left:10px;bottom:10px;display:flex;gap:4px;flex-wrap:wrap;max-width:calc(100% - 20px)}
 .camBar button{background:rgba(255,253,249,.88);color:#1d2329;border:0;border-radius:8px;padding:5px 9px;font-size:12.5px;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .camBar button[aria-pressed="true"]{background:#1f5b9e;color:#fff}
@@ -150,6 +151,12 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;
         <li>Übernimm die Messwerte mit <b>In Messprotokoll übernehmen</b>. Wiederhole den Versuch mit anderen Einstellungen.</li>
         <li>Werte im Protokoll aus: Diagramme, Ausgleichskurve, Impulsbilanz. Mit <b>CSV</b> kannst du die Daten in eine Tabellenkalkulation holen.</li>
       </ol>
+      <h3>Mit VR-Brille</h3>
+      <ul>
+        <li>Öffne diese Adresse im Browser der Brille (z. B. Pico). Oben rechts erscheint dann <b>In VR starten</b>.</li>
+        <li>Du stehst vor der Bahn in echter Größe. Das Bedienpult schwebt vor dir, das Protokoll steht an der Tafel.</li>
+        <li>Zielen und Trigger: bedienen. Stick nach vorn: springen. Stick zur Seite: drehen. Taste A oder X: Pult holen.</li>
+      </ul>
       <h3>Gut zu wissen</h3>
       <ul>
         <li>Jede Lichtschranke misst den Zeitpunkt t, an dem die Blende den Strahl erreicht, und die Dunkelzeit Δt. Daraus folgt v = b / Δt.</li>
@@ -175,6 +182,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;
       <span class="chip mono" id="chipT">t = 0,000 s</span>
       <span class="chip" id="chipState">bereit</span>
     </div>
+    <button class="vrBtn" id="btnVR" hidden>In VR starten</button>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="camBar" id="camBar">
       <button data-cam="total" aria-pressed="true">Übersicht</button>
@@ -310,6 +318,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* =========================================================
    Konstanten (Meter, Kilogramm, Sekunden)
@@ -854,9 +863,9 @@ function layoutTeller() {
 
 /* Faden als Linie */
 const THREAD_N = 64;
-const threadGeo = new THREE.BufferGeometry();
-threadGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(THREAD_N * 3), 3));
-const thread = new THREE.Line(threadGeo, new THREE.LineBasicMaterial({ color: 0x2b2b2b }));
+const thread = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0007, 0.0007, 1, 6), std(0x2b2b2b, 0.8), THREAD_N - 1);
+thread.frustumCulled = false;
+const _tM = new THREE.Matrix4(), _tQ = new THREE.Quaternion(), _tA = new THREE.Vector3(), _tB = new THREE.Vector3(), _tS = new THREE.Vector3(), _tY = new THREE.Vector3(0, 1, 0);
 scene.add(thread);
 
 /* =========================================================
@@ -906,7 +915,7 @@ const COUNTER = (() => {
   mesh(new THREE.PlaneGeometry(0.072, 0.009), new THREE.MeshStandardMaterial({ map: label }), -0.08, 0.0072, 0.0758, g, false);
   for (let i = 0; i < 4; i++) cylZ(0.006, 0.012, std(0x1f2226, 0.5), -0.09 + i * 0.04, 0.05, -0.08, g, 14);
   for (const x of [-0.12, 0.12]) for (const z of [-0.06, 0.06]) cylY(0.008, 0.004, MAT.rubber, x, 0.002, z, g, 12);
-  return { g, canvas: c, ctx: c.getContext('2d'), tex: t };
+  return { g, canvas: c, ctx: c.getContext('2d', { willReadFrequently: true }), tex: t };
 })();
 const counterSocket = (i) => new THREE.Vector3(-0.09 + i * 0.04, 0.05, -0.086).applyMatrix4(COUNTER.g.matrixWorld);
 let counterDirty = true;
@@ -1017,7 +1026,7 @@ function blowerSound(p) { if (AC && blowerGain) blowerGain.gain.setTargetAtTime(
 function sfx(type) {
   if (!AC || !P.sound) return;
   const t = AC.currentTime;
-  const cfg = { el: [2600, 0.05, 0.35, 'bandpass'], inel: [380, 0.09, 0.5, 'lowpass'], launch: [1500, 0.04, 0.3, 'bandpass'], magnet: [900, 0.03, 0.25, 'bandpass'], land: [220, 0.12, 0.55, 'lowpass'], end: [700, 0.06, 0.3, 'bandpass'] }[type];
+  const cfg = { el: [2600, 0.05, 0.35, 'bandpass'], inel: [380, 0.09, 0.5, 'lowpass'], launch: [1500, 0.04, 0.3, 'bandpass'], magnet: [900, 0.03, 0.25, 'bandpass'], land: [220, 0.12, 0.55, 'lowpass'], end: [700, 0.06, 0.3, 'bandpass'], ui: [1800, 0.02, 0.12, 'bandpass'] }[type];
   if (!cfg) return;
   const n = Math.floor(AC.sampleRate * cfg[1]), buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
@@ -1073,10 +1082,10 @@ function step(h) {
       c1.v = (P0 - M2 * e * (v1 - v2)) / (M1 + M2);
       c2.v = (P0 + M1 * e * (v1 - v2)) / (M1 + M2);
       const mid = (c1.s + c2.s) / 2; c1.s = mid - CONTACT / 2; c2.s = mid + CONTACT / 2;
-      sfx('el');
+      sfx('el'); if (xrOn) xrPulseAll(0.7, 40);
     } else {
       c1.v = c2.v = P0 / (M1 + M2); S.coupled = true; c2.s = c1.s + CONTACT;
-      sfx('inel');
+      sfx('inel'); if (xrOn) xrPulseAll(0.9, 60);
     }
     if (S.tColl === null) { S.tColl = t0 + h; S.vAfter = [c1.v, c2.v]; }
   }
@@ -1223,7 +1232,6 @@ function updateScene(rdt, now) {
     const wy = TOP_Y0 - S.w.d;
     WEIGHT.g.position.set(PX + PR, wy, 0);
     PULLEY.wheel.rotation.z = -S.w.d / PR;
-    const pos = threadGeo.attributes.position.array;
     const hx = X0 + S.c[0].s + CART_L / 2 + 0.01, hy = HOOK_Y + lift;
     const slack = Math.max(0, (S.c[0].s - S.c[0].s0) - S.w.d);
     const pts = [];
@@ -1233,9 +1241,14 @@ function updateScene(rdt, now) {
     for (let i = 0; i < nA; i++) { const a = Math.PI / 2 - (i / (nA - 1)) * Math.PI / 2; pts.push([PX + PR * Math.cos(a), AXLE_Y + PR * Math.sin(a)]); }
     const vTop = AXLE_Y, vBot = wy;
     for (let i = 0; i < nV; i++) { const t = i / (nV - 1); const bow = Math.min(0.05, slack * 0.6) * Math.sin(Math.PI * t); pts.push([PX + PR + bow, vTop + (vBot - vTop) * t]); }
-    for (let i = 0; i < THREAD_N; i++) { pos[i * 3] = pts[i][0]; pos[i * 3 + 1] = pts[i][1]; pos[i * 3 + 2] = 0; }
-    threadGeo.attributes.position.needsUpdate = true;
-    threadGeo.computeBoundingSphere();
+    for (let i = 0; i < THREAD_N - 1; i++) {
+      _tA.set(pts[i][0], pts[i][1], 0); _tB.set(pts[i + 1][0], pts[i + 1][1], 0);
+      const len = _tA.distanceTo(_tB);
+      if (len > 1e-6) _tQ.setFromUnitVectors(_tY, _tB.clone().sub(_tA).divideScalar(len));
+      _tM.compose(_tA.add(_tB).multiplyScalar(0.5), _tQ, _tS.set(1, Math.max(len, 1e-5), 1));
+      thread.setMatrixAt(i, _tM);
+    }
+    thread.instanceMatrix.needsUpdate = true;
     MAGNET.ledMat.emissiveIntensity = S.released ? 0 : 2.2;
   }
 
@@ -1263,12 +1276,12 @@ function updateScene(rdt, now) {
 
   // Staub
   const mp = motes.geometry.attributes.position.array;
-  for (let i = 0; i < mp.length; i += 3) {
+  for (let i = 0; motes.visible && i < mp.length; i += 3) {
     mp[i + 1] += Math.sin(now * 0.0003 + i) * 0.00012 - 0.00004;
     mp[i] += Math.cos(now * 0.0002 + i * 0.7) * 0.00008;
     if (mp[i + 1] < 0.9) mp[i + 1] = 2.7;
   }
-  motes.geometry.attributes.position.needsUpdate = true;
+  if (motes.visible) motes.geometry.attributes.position.needsUpdate = true;
 }
 
 /* =========================================================
@@ -1311,6 +1324,7 @@ function updateCamera(rdt) {
 }
 
 function resize() {
+  if (renderer.xr.isPresenting) return;
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
@@ -1340,7 +1354,8 @@ canvas.addEventListener('pointermove', e => { if (e.buttons) return; canvas.styl
    Hauptschleife
    ========================================================= */
 let last = performance.now(), hudT = 0;
-function frame(now) {
+function frame() {
+  const now = performance.now(); frameNo++;
   const rdt = Math.min(0.05, (now - last) / 1000); last = now;
   const target = S.blower ? 1 : 0;
   S.p += (target - S.p) * (1 - Math.exp(-rdt / (S.blower ? 0.6 : 1.0)));
@@ -1353,19 +1368,17 @@ function frame(now) {
     for (let i = 0; i < n && S.running; i++) step(hh);
   }
   updateScene(rdt, now);
-  updateCamera(rdt);
+  if (xrOn) xrUpdate(rdt, now); else updateCamera(rdt);
 
   hudT += rdt;
   if (hudT > 0.05) {
     hudT = 0;
     document.getElementById('chipT').textContent = 't = ' + nf(S.t, 3) + ' s';
     document.getElementById('meter').style.width = (S.p * 100).toFixed(0) + '%';
-    if (S.running) counterDirty = true;
   }
   if (counterDirty) { drawCounter(); counterDirty = false; }
   if (runTableDirty) { renderRunTable(); runTableDirty = false; }
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
 }
 
 /* =========================================================
@@ -1374,9 +1387,10 @@ function frame(now) {
 const $ = id => document.getElementById(id);
 function nf(x, d = 3) { if (x === null || x === undefined || !isFinite(x)) return '–'; const s = x.toFixed(d).replace('.', ','); return s.startsWith('-') && Number(x.toFixed(d)) !== 0 ? '−' + s.slice(1) : s.replace('-', ''); }
 let toastTimer = null;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3600); }
+function toast(msg) { if (xrOn) vrToast(msg); const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3600); }
 
 function toggleBlower() {
+  panelDirty = true;
   audioInit();
   S.blower = !S.blower;
   $('btnBlower').classList.toggle('on', S.blower);
@@ -1445,6 +1459,7 @@ function buildGateRows() {
 }
 
 function updatePanels() {
+  panelDirty = true;
   const bew = P.mode === 'bew';
   $('optBew').hidden = !bew; $('optStoss').hidden = bew;
   $('zugOpts').hidden = P.drive !== 'zug'; $('federOpts1').hidden = P.drive !== 'feder';
@@ -1456,6 +1471,7 @@ function updatePanels() {
 const aTheo = () => P.mh * G / (m1() + P.mh);
 
 function updateRunUI() {
+  panelDirty = true;
   $('chipState').textContent = S.running ? (S.paused ? 'pausiert' : 'Messung läuft') : S.done ? 'Lauf beendet' : 'bereit';
   $('btnPause').textContent = S.paused ? 'Weiter' : 'Pause';
   $('btnPause').disabled = !S.running;
@@ -1464,6 +1480,8 @@ function updateRunUI() {
 /* ---------- Tabelle des aktuellen Laufs ---------- */
 let runTableDirty = false;
 function renderRunTable() {
+  // das Pult nur neu zeichnen, wenn die Messwerte gerade sichtbar sind
+  if (vrTab === 'werte' || S.events.length <= 1) panelDirty = true;
   const tb = $('runTable');
   const evs = [...S.events].sort((a, b) => a.tOn - b.tOn);
   if (!evs.length) {
@@ -1662,6 +1680,7 @@ function axes(g, w, h, xMax, yMax, xLabel, yLabel, yMin = 0) {
   return { X, Y };
 }
 function renderChart() {
+  panelDirty = true; boardDirty = true;
   const out = $('fitOut');
   const { g, w, h } = prepCanvas();
   if (protoTab === 'bew') {
@@ -1735,6 +1754,560 @@ new ResizeObserver(() => renderChart()).observe($('chart'));
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderChart);
 
 /* =========================================================
+   VR (WebXR): Bedienpult, Laserstrahl, Greifen, Teleport
+   ========================================================= */
+renderer.xr.enabled = true;
+const rig = new THREE.Group(); scene.add(rig); rig.add(camera);
+const xrRoot = new THREE.Group(); xrRoot.visible = false; scene.add(xrRoot);
+let xrOn = false, xrFrames = 0, xrSaved = null, xrModelsLoaded = false, frameNo = 0;
+
+/* Feste Teile zusammenfassen: weniger Zeichenaufrufe, wichtig für die Brille */
+(function bakeStatic() {
+  const dyn = new Set([...CARTS.map(k => k.grp), ...STARTER.map(k => k.g), MAGNET.g, MAGNET.cable, PULLEY.g, WEIGHT.g, TELLER.g, thread,
+    ...GATEOBJ.map(k => k.g), COUNTER.g, BLOWER.g, BLOWER.hose, motes, window.__clock.hH.parent, xrRoot, rig]);
+  const isDyn = o => { for (let p = o; p; p = p.parent) if (dyn.has(p)) return true; return false; };
+  scene.updateMatrixWorld(true);
+  const buckets = new Map();
+  scene.traverse(o => {
+    if (!o.isMesh || Array.isArray(o.material) || isDyn(o)) return;
+    const m = o.material;
+    const key = [m.type, m.color && m.color.getHex(), m.roughness, m.metalness, m.map && m.map.uuid, m.emissive && m.emissive.getHex(), m.emissiveIntensity, m.transparent, m.opacity, m.side, o.castShadow, o.receiveShadow].join('|');
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  });
+  for (const list of buckets.values()) {
+    const geos = list.map(o => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); return g; });
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const mm = new THREE.Mesh(merged, list[0].material);
+    mm.castShadow = list[0].castShadow; mm.receiveShadow = list[0].receiveShadow;
+    scene.add(mm);
+    list.forEach(o => o.parent.remove(o));
+    geos.forEach(g => g.dispose());
+  }
+})();
+
+/* ---------- Bedienpult ---------- */
+const PW = 1536, PH = 1024, PANEL_W = 0.72, PANEL_H = PANEL_W * PH / PW;
+const pCanvas = document.createElement('canvas'); pCanvas.width = PW; pCanvas.height = PH;
+const pg = pCanvas.getContext('2d', { willReadFrequently: true });
+const pTex = new THREE.CanvasTexture(pCanvas); pTex.colorSpace = THREE.SRGBColorSpace; pTex.generateMipmaps = false; pTex.minFilter = THREE.LinearFilter;
+const panel = new THREE.Group(); panel.rotation.order = 'YXZ'; xrRoot.add(panel);
+const pScreen = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, PANEL_H), new THREE.MeshBasicMaterial({ map: pTex, toneMapped: false }));
+panel.add(pScreen);
+const pBack = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.02, PANEL_H + 0.02, 0.012), std(0x2a2e33, 0.5, 0.3)); pBack.position.z = -0.0075; panel.add(pBack);
+const sCanvas = document.createElement('canvas'); sCanvas.width = 256; sCanvas.height = 112;
+const sTex = new THREE.CanvasTexture(sCanvas); sTex.colorSpace = THREE.SRGBColorSpace;
+const pStatus = new THREE.Mesh(new THREE.PlaneGeometry(256 / PW * PANEL_W, 112 / PW * PANEL_W), new THREE.MeshBasicMaterial({ map: sTex, toneMapped: false }));
+pStatus.position.set((1272 + 128) / PW * PANEL_W - PANEL_W / 2, PANEL_H / 2 - (896 + 56) / PH * PANEL_H, 0.001); panel.add(pStatus);
+const mkHover = () => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false, toneMapped: false })); m.position.z = 0.0015; m.visible = false; panel.add(m); return m; };
+
+let vrTab = 'aufbau', panelDirty = true, boardDirty = true, statusText = '';
+let WIDGETS = [];
+const PC = { bg: '#1c2125', card: '#2a3036', card2: '#363d44', ink: '#eef1f4', mute: '#a4aeb8', accent: '#2f7fd6', go: '#1f9d58', warn: '#e3a35b', c1: '#6ea6e6', c2: '#ee9a5c' };
+function pRound(x, y, w, h, r, col) { pg.fillStyle = col; pg.beginPath(); pg.roundRect(x, y, w, h, r); pg.fill(); }
+function pText(s, x, y, size = 36, col = PC.ink, align = 'left', weight = 400) { pg.font = `${weight} ${size}px system-ui,-apple-system,"Segoe UI",sans-serif`; pg.fillStyle = col; pg.textAlign = align; pg.textBaseline = 'middle'; pg.fillText(s, x, y); }
+function pBtn(x, y, w, h, label, act, o = {}) {
+  pRound(x, y, w, h, 14, o.go ? PC.go : o.on ? PC.accent : PC.card2);
+  pText(label, x + w / 2, y + h / 2 + 1, o.size || 36, o.off ? '#79838d' : PC.ink, 'center', o.on || o.go ? 600 : 400);
+  if (act && !o.off) WIDGETS.push({ x, y, w, h, act });
+}
+function pSeg(x, y, w, label, opts, cur, act) {
+  pText(label, x, y + 18, 30, PC.mute);
+  const bw = (w - (opts.length - 1) * 8) / opts.length;
+  opts.forEach(([v, t], i) => pBtn(x + i * (bw + 8), y + 40, bw, 80, t, () => act(v), { on: String(v) === String(cur), size: 34 }));
+}
+function pStep(x, y, w, label, val, id) {
+  pText(label, x, y + 42, 34);
+  const bx = x + w - 330;
+  pBtn(bx, y, 84, 84, '−', () => domStep(id, -1), { size: 48 });
+  pText(val, bx + 165, y + 42, 36, PC.ink, 'center', 600);
+  pBtn(bx + 246, y, 84, 84, '+', () => domStep(id, 1), { size: 48 });
+}
+function pWrap(s, x, y, w, size = 30, col = PC.mute, lh = 1.3, maxLines = 6) {
+  pg.font = `400 ${size}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+  const words = String(s).split(/\s+/); let line = '', n = 0;
+  for (const wd of words) {
+    if (pg.measureText(line + wd).width > w && line) { pText(line.trim(), x, y + n * size * lh, size, col); n++; line = ''; if (n >= maxLines) return n; }
+    line += wd + ' ';
+  }
+  if (line.trim()) { pText(line.trim(), x, y + n * size * lh, size, col); n++; }
+  return n;
+}
+function pTable(x, y, cols, rows, rowH = 62, size = 32) {
+  cols.forEach(c => pText(c.t, c.x, y, size - 6, PC.mute, c.l ? 'left' : 'right', 600));
+  pg.fillStyle = PC.card2; pg.fillRect(x, y + 24, cols[cols.length - 1].x - x, 2);
+  rows.forEach((r, i) => {
+    const yy = y + 58 + i * rowH;
+    if (r.marker) { pText(r.marker, x + (cols[cols.length - 1].x - x) / 2, yy, size - 2, PC.warn, 'center'); return; }
+    r.forEach((v, k) => pText(String(v), cols[k].x, yy, size, PC.ink, cols[k].l ? 'left' : 'right'));
+  });
+}
+function domStep(id, dir, mult = 1) { const r = $(id); r.value = Number(r.value) + dir * Number(r.step) * mult; r.dispatchEvent(new Event('input')); panelDirty = true; }
+function domSeg(id, v) { const b = $(id).querySelector(`button[data-v="${v}"]`); if (b) b.click(); panelDirty = true; }
+function domCycle(id, dir = 1) { const s = $(id); if (!s.options.length) return; s.selectedIndex = (s.selectedIndex + dir + s.options.length) % s.options.length; s.dispatchEvent(new Event('change')); panelDirty = true; }
+const selText = id => { const s = $(id), o = s.options[s.selectedIndex]; return o ? o.textContent : '–'; };
+
+const SPOTS = [
+  { n: 'Vor der Bahn', x: 0, z: 1.25, look: [0, 0] },
+  { n: 'Am Startende', x: -0.8, z: 1.05, look: [-0.75, 0] },
+  { n: 'An der Umlenkrolle', x: 1.6, z: 0.85, look: [1.0, 0.45], side: 0.35 },
+  { n: 'Am Zählgerät', x: 0.72, z: 0.85, look: [0.62, 0.27], side: -0.45 },
+  { n: 'Längs der Bahn', x: -2.1, z: 0.1, look: [0, 0] },
+  { n: 'Hinter der Bahn', x: 0, z: -1.15, look: [0, 0] }
+];
+
+function renderPanel() {
+  panelDirty = false; WIDGETS = [];
+  pg.fillStyle = PC.bg; pg.fillRect(0, 0, PW, PH);
+  const tabs = [['aufbau', 'Aufbau'], ['ls', 'Lichtschranken'], ['werte', 'Messwerte'], ['proto', 'Protokoll'], ['dia', 'Diagramm'], ['mehr', 'Mehr']];
+  const tw = (PW - 24 - 5 * 8 - 24) / 6;
+  tabs.forEach(([v, t], i) => pBtn(24 + i * (tw + 8), 14, tw, 84, t, () => { vrTab = v; panelDirty = true; }, { on: vrTab === v, size: 33 }));
+  const LX = 24, RX = 780, CW = 732;
+  if (vrTab === 'aufbau') {
+    pBtn(LX, 116, CW, 92, S.blower ? 'Gebläse läuft – ausschalten' : 'Gebläse einschalten', toggleBlower, { go: S.blower, size: 38 });
+    pSeg(LX, 222, CW, 'Versuch', [['bew', 'Bewegung'], ['stoss', 'Stoß']], P.mode, v => domSeg('segMode', v));
+    if (P.mode === 'bew') {
+      pSeg(LX, 366, CW, 'Antrieb', [['zug', 'Zugmasse'], ['feder', 'Federstarter']], P.drive, v => domSeg('segDrive', v));
+      pSeg(LX, 510, CW, 'Blendenbreite', [[0.025, '2,5 cm'], [0.05, '5,0 cm'], [0.1, '10 cm']], P.b, v => setSel('selB', v));
+      let y = 126;
+      if (P.drive === 'zug') {
+        pStep(RX, y, CW, 'Zugmasse', $('oMh').textContent, 'rMh'); y += 104;
+        pStep(RX, y, CW, 'Abfangteller nach', $('oSa').textContent, 'rSa'); y += 104;
+      } else { pStep(RX, y, CW, 'Federstufe', $('oF0').textContent, 'rF0'); y += 104; }
+      pStep(RX, y, CW, 'Zusatzmasse Wagen', $('oM1b').textContent, 'rM1b'); y += 120;
+      pWrap($('hM1b').textContent, RX, y, CW, 32); y += 90;
+      if (P.drive === 'zug') pWrap($('hSa').textContent, RX, y, CW, 30);
+    } else {
+      pSeg(LX, 366, CW, 'Stoßart', [['el', 'elastisch'], ['inel', 'unelastisch']], P.coll, v => domSeg('segColl', v));
+      pText('Wagen 1', LX, 526, 32, PC.c1, 'left', 600);
+      pStep(LX, 556, CW, 'Zusatzmasse', $('oM1s').textContent, 'rM1s');
+      pStep(LX, 656, CW, 'Federstufe', $('oF1').textContent, 'rF1');
+      pText('Wagen 2', RX, 134, 32, PC.c2, 'left', 600);
+      pSeg(RX, 150, CW, '', [['ruht', 'ruht'], ['entgegen', 'fährt entgegen']], P.w2, v => domSeg('segW2', v));
+      pStep(RX, 300, CW, 'Zusatzmasse', $('oM2').textContent, 'rM2');
+      if (P.w2 === 'ruht') {
+        pStep(RX, 400, CW, 'Position', $('oS2').textContent, 'rS2');
+        pWrap('Du kannst Wagen 2 auch direkt verschieben: zielen, Trigger halten, ziehen.', RX, 530, CW, 30);
+      } else pStep(RX, 400, CW, 'Federstufe', $('oF2').textContent, 'rF2');
+    }
+  } else if (vrTab === 'ls') {
+    const n = P.mode === 'bew' ? P.nBew : P.nSto, arr = P.mode === 'bew' ? P.gatesBew : P.gatesSto;
+    pSeg(LX, 112, CW, 'Anzahl', [[1, '1'], [2, '2'], [3, '3'], [4, '4']], n, v => domSeg('segN', v));
+    pSeg(RX, 112, CW, 'Blendenbreite', [[0.025, '2,5 cm'], [0.05, '5,0 cm'], [0.1, '10 cm']], P.b, v => setSel('selB', v));
+    for (let i = 0; i < n; i++) {
+      const y = 252 + i * 104;
+      pText(`Lichtschranke ${i + 1}`, LX, y + 42, 36);
+      const bx = 480;
+      pBtn(bx, y, 120, 84, '−10 cm', () => domStep(`rG${i}`, -1, 10), { size: 30 });
+      pBtn(bx + 130, y, 110, 84, '−1 cm', () => domStep(`rG${i}`, -1), { size: 30 });
+      pText(nf(arr[i], 2) + ' m', bx + 370, y + 42, 40, PC.ink, 'center', 600);
+      pBtn(bx + 500, y, 110, 84, '+1 cm', () => domStep(`rG${i}`, 1), { size: 30 });
+      pBtn(bx + 620, y, 120, 84, '+10 cm', () => domStep(`rG${i}`, 1, 10), { size: 30 });
+    }
+    pWrap('Am einfachsten: Ziele direkt auf eine Lichtschranke, halte den Trigger und schiebe sie an die Stelle, die du am Maßstab abliest.', LX, 690, PW - 48, 32);
+  } else if (vrTab === 'werte') {
+    const evs = [...S.events].sort((a, b) => a.tOn - b.tOn);
+    if (!evs.length) pWrap('Noch keine Messwerte in diesem Lauf. Schalte das Gebläse ein und starte den Versuch.', LX, 150, PW - 48, 36, PC.ink);
+    else {
+      const rows = []; let shown = false;
+      evs.forEach((e, i) => {
+        if (S.tColl !== null && !shown && e.tOn > S.tColl) { rows.push({ marker: `Stoß bei t = ${nf(S.tColl, 3)} s` }); shown = true; }
+        rows.push([i + 1, `Wagen ${e.cart + 1}`, `LS ${e.gate + 1}`, nf(e.tOn, 3), nf(e.dt, 4), nf(Math.abs(e.v), 3), e.dir > 0 ? '→' : '←']);
+      });
+      if (S.tColl !== null && !shown) rows.push({ marker: `Stoß bei t = ${nf(S.tColl, 3)} s` });
+      pTable(LX, 130, [{ t: 'Nr.', x: LX, l: 1 }, { t: 'Wagen', x: 170, l: 1 }, { t: 'Schranke', x: 480 }, { t: 't in s', x: 720 }, { t: 'Δt in s', x: 980 }, { t: 'v = b/Δt in m/s', x: 1320 }, { t: 'Richtung', x: 1500 }], rows.slice(-11), 62, 34);
+    }
+    pText(`Blendenbreite b = ${nf(P.b * 100, 1)} cm`, LX, 860, 28, PC.mute);
+  } else if (vrTab === 'proto') {
+    pSeg(LX, 106, 600, '', [['bew', 'Bewegung'], ['stoss', 'Stoß']], protoTab, v => domSeg('segProto', v));
+    pBtn(1120, 146, 392, 80, 'Letzten Eintrag löschen', deleteLastEntry, { size: 32 });
+    if (protoTab === 'bew') {
+      const rows = PROTO.bew.slice(-9).map(r => [r.nr, 'R' + r.ser, r.ls, nf(r.s, 3), nf(r.t, 3), nf(r.dt, 4), nf(r.v, 3), nf(r.s / (r.t * r.t), 3)]);
+      if (!rows.length) pWrap('Noch keine Einträge. Übernimm einen Lauf mit „In Protokoll“.', LX, 300, PW - 48, 36, PC.ink);
+      else pTable(LX, 270, [{ t: 'Nr.', x: LX, l: 1 }, { t: 'Reihe', x: 130, l: 1 }, { t: 'LS', x: 320 }, { t: 's in m', x: 540 }, { t: 't in s', x: 760 }, { t: 'Δt in s', x: 1000 }, { t: 'v in m/s', x: 1240 }, { t: 's/t² in m/s²', x: 1500 }], rows, 60, 34);
+    } else {
+      const rows = PROTO.stoss.slice(-9).map(r => { const d = derive(r); return [r.nr, r.art === 'el' ? 'el.' : 'unel.', nf(r.m1 * 1000, 0), nf(r.m2 * 1000, 0), nf(r.v1, 3), nf(r.v2, 3), nf(r.v1n, 3), nf(r.v2n, 3), nf(d.p, 4), nf(d.pn, 4), nf(d.e * 1000, 1), nf(d.en * 1000, 1)]; });
+      if (!rows.length) pWrap('Noch keine Stoßversuche im Protokoll.', LX, 300, PW - 48, 36, PC.ink);
+      else pTable(LX, 270, [{ t: 'Nr.', x: LX, l: 1 }, { t: 'Stoß', x: 90, l: 1 }, { t: 'm₁/g', x: 300 }, { t: 'm₂/g', x: 410 }, { t: 'v₁', x: 540 }, { t: 'v₂', x: 670 }, { t: "v₁'", x: 800 }, { t: "v₂'", x: 930 }, { t: 'p vor', x: 1085 }, { t: 'p nach', x: 1240 }, { t: 'E vor', x: 1370 }, { t: 'E nach', x: 1510 }], rows, 60, 30);
+      if (rows.length) pText('v in m/s (rechts positiv) · p in kg·m/s · E in mJ', LX, 862, 28, PC.mute);
+    }
+  } else if (vrTab === 'dia') {
+    pSeg(LX, 100, 420, '', [['bew', 'Bewegung'], ['stoss', 'Stoß']], protoTab, v => domSeg('segProto', v));
+    if (protoTab === 'bew') {
+      pBtn(470, 140, 240, 80, selText('selSeries'), () => domCycle('selSeries'), { size: 30 });
+      pBtn(722, 140, 340, 80, selText('selDia'), () => domCycle('selDia'), { size: 30 });
+      pBtn(1074, 140, 438, 80, selText('selFit'), () => domCycle('selFit'), { size: 28 });
+    } else pBtn(470, 140, 1042, 80, selText('selStossDia'), () => domCycle('selStossDia'), { size: 32 });
+    drawChartTo(pg, LX, 236, 860, 640);
+    pWrap($('fitOut').innerText.replace(/\n/g, ' '), 912, 270, 600, 34, PC.ink, 1.3, 14);
+  } else if (vrTab === 'mehr') {
+    pText('Standort wechseln', LX, 132, 30, PC.mute);
+    SPOTS.forEach((s, i) => pBtn(LX + (i % 2) * 372, 160 + Math.floor(i / 2) * 96, 360, 84, s.n, () => goSpot(s), { size: 30 }));
+    pBtn(LX, 470, 360, 84, P.ideal ? 'Ideale Bahn: an' : 'Ideale Bahn: aus', () => { $('cbIdeal').click(); panelDirty = true; }, { on: P.ideal, size: 30 });
+    pBtn(LX + 372, 470, 360, 84, P.sound ? 'Geräusche: an' : 'Geräusche: aus', () => { $('cbSound').click(); panelDirty = true; }, { on: P.sound, size: 30 });
+    pBtn(LX, 574, 732, 84, 'VR beenden', () => { const se = renderer.xr.getSession(); if (se) se.end(); }, { size: 34 });
+    pText('So bedienst du das Labor', RX, 132, 30, PC.mute);
+    let y = 176;
+    for (const t of ['Zielen und Trigger drücken: Knopf auswählen.', 'Auf Lichtschranke oder Wagen 2 zielen, Trigger halten: verschieben.', 'Auf das Gebläse zielen, Trigger: ein oder aus.', 'Auf Haltemagnet oder Federstarter zielen, Trigger: Start.', 'Stick nach vorn, loslassen: an die Stelle springen.', 'Stick zur Seite: drehen.', 'Taste A oder X: Bedienpult holen oder wegnehmen.', 'Seitliche Griff-Taste auf dem Pult: Pult verschieben.']) {
+      y += pWrap('• ' + t, RX, y, CW, 31, PC.ink, 1.25) * 40 + 12;
+    }
+  }
+  const zug = zugMode();
+  pBtn(14, 896, 390, 112, zug ? 'Haltemagnet lösen' : 'Federstarter auslösen', () => $('btnStart').click(), { go: true, off: S.running, size: 36 });
+  pBtn(416, 896, 240, 112, 'Zurücksetzen', () => $('btnReset').click(), { size: 33 });
+  pBtn(668, 896, 150, 112, S.paused ? 'Weiter' : 'Pause', () => { $('btnPause').click(); panelDirty = true; }, { off: !S.running, size: 33 });
+  pBtn(830, 896, 110, 112, nf(P.speed, P.speed === 1 ? 0 : P.speed === 0.5 ? 1 : 2) + '×', () => domCycle('selSpeed'), { size: 30 });
+  pBtn(952, 896, 310, 112, 'In Protokoll', () => $('btnTake').click(), { on: S.events.length > 0, size: 36 });
+  pTex.needsUpdate = true;
+}
+function setSel(id, v) { const s = $(id); s.value = v === 0.1 ? '0.10' : String(v); s.dispatchEvent(new Event('change')); panelDirty = true; }
+function deleteLastEntry() {
+  const a = protoTab === 'bew' ? PROTO.bew : PROTO.stoss;
+  if (!a.length) { toast('Das Protokoll ist leer.'); return; }
+  a.pop(); saveProto(); renderProto(); panelDirty = true;
+}
+function drawChartTo(g, x, y, w, h) {
+  const c = $('chart');
+  g.fillStyle = '#fbfaf6'; g.fillRect(x, y, w, h);
+  if (!c.width || !c.height) return;
+  const k = Math.min(w / c.width, h / c.height), dw = c.width * k, dh = c.height * k;
+  const bg = css('--surface');
+  // Diagrammfarben folgen dem Seitenthema, daher Grund passend füllen
+  g.fillStyle = bg || '#fbfaf6'; g.fillRect(x, y, w, h);
+  g.drawImage(c, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+function renderStatus() {
+  const txt = `t = ${nf(S.t, 3)} s|${S.running ? (S.paused ? 'pausiert' : 'Messung läuft') : S.done ? 'Lauf beendet' : 'bereit'}`;
+  if (txt === statusText) return;
+  statusText = txt;
+  const g = sCanvas.getContext('2d'), [a, b] = txt.split('|');
+  g.fillStyle = PC.bg; g.fillRect(0, 0, 256, 112);
+  g.fillStyle = PC.ink; g.font = '600 34px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(a, 128, 36);
+  g.fillStyle = PC.mute; g.font = '400 28px system-ui,sans-serif'; g.fillText(b, 128, 80);
+  sTex.needsUpdate = true;
+}
+
+/* ---------- Messtafel: das Protokoll steht an der Tafel ---------- */
+const bCanvas = document.createElement('canvas'); bCanvas.width = 2048; bCanvas.height = 860;
+const bTex = new THREE.CanvasTexture(bCanvas); bTex.colorSpace = THREE.SRGBColorSpace; bTex.anisotropy = MAXANI;
+const boardShow = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.05), new THREE.MeshBasicMaterial({ map: bTex }));
+boardShow.position.set(-0.75, 1.78, ROOM.z0 + 0.024); xrRoot.add(boardShow);
+function renderBoard() {
+  boardDirty = false;
+  const g = bCanvas.getContext('2d', { willReadFrequently: true }), W = 2048, H = 860, chalk = 'rgba(240,243,235,.92)', soft = 'rgba(225,232,222,.7)';
+  g.fillStyle = '#2d4639'; g.fillRect(0, 0, W, H);
+  const hand = (s, x, y, size, col = chalk, al = 'left') => { g.font = `500 ${size}px system-ui,sans-serif`; g.fillStyle = col; g.textAlign = al; g.textBaseline = 'middle'; g.fillText(s, x, y); };
+  hand(protoTab === 'bew' ? 'Messprotokoll: Bewegung' : 'Messprotokoll: Stoß', 40, 56, 54);
+  const row = (cells, xs, y, size, col) => cells.forEach((c, i) => hand(String(c), xs[i], y, size, col, 'right'));
+  if (protoTab === 'bew') {
+    const xs = [110, 230, 480, 680, 870, 1020];
+    row(['Reihe', 'LS', 's in m', 't in s', 'Δt in s', 'v in m/s'], xs, 134, 36, soft);
+    const rows = PROTO.bew.slice(-10);
+    rows.forEach((r, i) => row(['R' + r.ser, r.ls, nf(r.s, 3), nf(r.t, 3), nf(r.dt, 3), nf(r.v, 3)], xs, 196 + i * 62, 44));
+    if (!rows.length) hand('Noch keine Messwerte.', 40, 240, 44, soft);
+  } else {
+    const xs = [120, 240, 370, 510, 650, 790, 920, 1030];
+    row(['Stoß', 'm₁/g', 'm₂/g', 'v₁', 'v₂', "v₁'", "v₂'", 'Δp'], xs, 134, 30, soft);
+    const rows = PROTO.stoss.slice(-10);
+    rows.forEach((r, i) => { const d = derive(r); row([r.art === 'el' ? 'el.' : 'unel.', nf(r.m1 * 1000, 0), nf(r.m2 * 1000, 0), nf(r.v1, 2), nf(r.v2, 2), nf(r.v1n, 2), nf(r.v2n, 2), d.dp === null ? '–' : nf(d.dp, 0) + '%'], xs, 196 + i * 62, 38); });
+    if (!rows.length) hand('Noch keine Stoßversuche.', 40, 240, 44, soft);
+  }
+  const px = 1070, py = 40, pw = 948, ph = 640;
+  g.save(); g.translate(px, py); g.rotate(-0.004);
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(6, 8, pw, ph);
+  drawChartTo(g, 0, 0, pw, ph);
+  g.restore();
+  const fit = $('fitOut').innerText.replace(/\n/g, ' · ');
+  g.font = '500 30px system-ui,sans-serif'; g.fillStyle = chalk; g.textAlign = 'left'; g.textBaseline = 'middle';
+  let line = '', n = 0;
+  for (const wd of fit.split(/\s+/)) {
+    if (g.measureText(line + wd).width > pw && line) { g.fillText(line, px, 730 + n * 40); n++; line = ''; if (n > 2) break; }
+    line += wd + ' ';
+  }
+  if (n <= 2 && line.trim()) g.fillText(line, px, 730 + n * 40);
+  bTex.needsUpdate = true;
+}
+
+/* ---------- Griffflächen in der Szene ---------- */
+const hitMat = () => new THREE.MeshBasicMaterial({ color: 0x6ea6e6, transparent: true, opacity: 0.2, depthWrite: false, visible: false });
+function addProxy(parent, w, h, d, x, y, z, vr, label) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hitMat());
+  m.position.set(x, y, z); m.userData.vr = vr; m.userData.label = label; parent.add(m); return m;
+}
+const PROXIES = [];
+GATEOBJ.forEach((o, i) => PROXIES.push(addProxy(o.g, 0.05, 0.11, 0.15, 0, 1.105, 0, 'gate:' + i, `Lichtschranke ${i + 1} verschieben`)));
+PROXIES.push(addProxy(CARTS[1].grp, CART_L, 0.13, 0.11, 0, 1.05, 0, 'cart2', 'Wagen 2 verschieben'));
+const startProxy = addProxy(xrRoot, 0.075, 0.09, 0.11, X0 + 0.022, HOOK_Y, 0, 'start', 'Start');
+PROXIES.push(startProxy);
+const blowerProxy = addProxy(xrRoot, 0.26, 0.21, 0.26, BLOWER.g.position.x, TABLE_Y + 0.095, BLOWER.g.position.z, 'blower', 'Gebläse ein / aus');
+PROXIES.push(blowerProxy);
+const proxyOK = o => {
+  for (let p = o.parent; p; p = p.parent) if (!p.visible && p !== xrRoot) return false;
+  const v = o.userData.vr;
+  if (v === 'cart2') return P.mode === 'stoss' && P.w2 === 'ruht' && !S.running;
+  return true;
+};
+
+/* Schild am Laserpunkt */
+const lCanvas = document.createElement('canvas'); lCanvas.width = 640; lCanvas.height = 96;
+const lTex = new THREE.CanvasTexture(lCanvas); lTex.colorSpace = THREE.SRGBColorSpace;
+const hoverLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: lTex, depthTest: false, transparent: true, toneMapped: false }));
+hoverLabel.scale.set(0.3, 0.045, 1); hoverLabel.visible = false; hoverLabel.renderOrder = 10; xrRoot.add(hoverLabel);
+let hoverText = '';
+function setHoverLabel(t) {
+  if (t === hoverText) return; hoverText = t;
+  const g = lCanvas.getContext('2d'); g.clearRect(0, 0, 640, 96);
+  g.font = '600 40px system-ui,sans-serif'; const w = Math.min(620, g.measureText(t).width + 44);
+  g.fillStyle = 'rgba(20,24,28,.88)'; g.beginPath(); g.roundRect(320 - w / 2, 10, w, 76, 18); g.fill();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 320, 49);
+  lTex.needsUpdate = true;
+}
+
+/* Meldungen im Blickfeld */
+const tCanvas = document.createElement('canvas'); tCanvas.width = 1024; tCanvas.height = 256;
+const tTex = new THREE.CanvasTexture(tCanvas); tTex.colorSpace = THREE.SRGBColorSpace;
+const vrMsg = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.18), new THREE.MeshBasicMaterial({ map: tTex, transparent: true, depthTest: false, toneMapped: false }));
+vrMsg.visible = false; vrMsg.renderOrder = 11; xrRoot.add(vrMsg);
+let vrMsgUntil = 0;
+function vrToast(msg, secs = 4.5) {
+  const g = tCanvas.getContext('2d'); g.clearRect(0, 0, 1024, 256);
+  g.fillStyle = 'rgba(20,24,28,.92)'; g.beginPath(); g.roundRect(4, 4, 1016, 248, 28); g.fill();
+  g.font = '500 42px system-ui,sans-serif'; g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const lines = []; let line = '';
+  for (const w of msg.split(/\s+/)) { if (g.measureText(line + w).width > 940 && line) { lines.push(line.trim()); line = ''; } line += w + ' '; }
+  if (line.trim()) lines.push(line.trim());
+  const sh = lines.slice(0, 4), y0 = 128 - (sh.length - 1) * 27;
+  sh.forEach((l, i) => g.fillText(l, 512, y0 + i * 54));
+  tTex.needsUpdate = true;
+  const head = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+  const fwd = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld);
+  vrMsg.position.copy(head).addScaledVector(fwd, 1.1); vrMsg.position.y -= 0.12;
+  vrMsg.lookAt(head);
+  vrMsg.visible = true; vrMsgUntil = performance.now() + secs * 1000;
+}
+
+/* ---------- Hände und Controller ---------- */
+const xrRay = new THREE.Raycaster();
+const laserGeo = new THREE.CylinderGeometry(0.0012, 0.0012, 1, 6); laserGeo.rotateX(Math.PI / 2); laserGeo.translate(0, 0, -0.5);
+const HANDS = [0, 1].map(i => {
+  const ctrl = renderer.xr.getController(i), grip = renderer.xr.getControllerGrip(i), hand = renderer.xr.getHand(i);
+  rig.add(ctrl, grip, hand);
+  const laser = new THREE.Mesh(laserGeo, new THREE.MeshBasicMaterial({ color: 0x8fc4ff, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }));
+  laser.visible = false; ctrl.add(laser);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })); dot.visible = false; xrRoot.add(dot);
+  const h = { i, ctrl, grip, hand, laser, dot, hover: mkHover(), src: null, hit: null, drag: null, tele: false, turned: false, btnWas: false };
+  ctrl.addEventListener('connected', e => { h.src = e.data; laser.visible = e.data.targetRayMode === 'tracked-pointer'; });
+  ctrl.addEventListener('disconnected', () => { h.src = null; h.hit = null; h.drag = null; h.tele = false; laser.visible = false; dot.visible = false; h.hover.visible = false; });
+  ctrl.addEventListener('selectstart', () => xrPress(h));
+  ctrl.addEventListener('selectend', () => { h.drag = null; });
+  ctrl.addEventListener('squeezestart', () => { if (h.hit && h.hit.object === pScreen) { ctrl.attach(panel); h.holding = true; } });
+  ctrl.addEventListener('squeezeend', () => { if (h.holding) { xrRoot.attach(panel); h.holding = false; } });
+  return h;
+});
+function xrPulse(h, v = 0.4, ms = 25) { try { const gp = h.src && h.src.gamepad; const a = gp && gp.hapticActuators && gp.hapticActuators[0]; if (a && a.pulse) a.pulse(v, ms); } catch (e) { } }
+function xrPulseAll(v, ms) { HANDS.forEach(h => xrPulse(h, v, ms)); }
+function xrPress(h) {
+  if (h.tele || !h.hit) return;
+  const o = h.hit.object;
+  if (o === pScreen) {
+    const uv = h.hit.uv, px = uv.x * PW, py = (1 - uv.y) * PH;
+    const w = WIDGETS.find(k => px >= k.x && px <= k.x + k.w && py >= k.y && py <= k.y + k.h);
+    if (w) { audioInit(); sfx('ui'); xrPulse(h); w.act(); panelDirty = true; }
+    return;
+  }
+  const v = o.userData.vr;
+  if (v === 'blower') { toggleBlower(); sfx('ui'); xrPulse(h); }
+  else if (v === 'start') { if (!S.running) $('btnStart').click(); xrPulse(h, 0.6, 40); }
+  else if (v && v.startsWith('gate:')) {
+    const gi = Number(v.slice(5)), arr = P.mode === 'bew' ? P.gatesBew : P.gatesSto;
+    h.drag = { kind: 'gate', gi, off: arr[gi] - rayToTrackS(h, 1.09) }; xrPulse(h);
+  } else if (v === 'cart2') { h.drag = { kind: 'cart', off: S.c[1].s - rayToTrackS(h, 1.05) }; xrPulse(h); }
+}
+const _vO = new THREE.Vector3(), _vD = new THREE.Vector3();
+/* nächster Punkt zwischen Laserstrahl und Bahnachse, als Bahnposition s */
+function rayToTrackS(h, y) {
+  xrRay.setFromXRController(h.ctrl);
+  _vO.copy(xrRay.ray.origin); _vD.copy(xrRay.ray.direction);
+  const wy = _vO.y - y, wz = _vO.z;
+  const e = _vD.x * _vO.x + _vD.y * wy + _vD.z * wz, b = _vD.x, den = 1 - b * b;
+  if (den < 0.02) return _vO.x - X0;
+  return (_vO.x - b * e) / den - X0;
+}
+function setRange(id, val) {
+  const r = $(id), before = r.value;
+  r.value = val;
+  if (r.value !== before) { r.dispatchEvent(new Event('input')); if (vrTab === 'ls' || vrTab === 'aufbau') panelDirty = true; }
+}
+
+/* ---------- Bewegen ---------- */
+const UP = new THREE.Vector3(0, 1, 0);
+function headYaw() { const f = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld); return Math.atan2(-f.x, -f.z); }
+function headPos() { return new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld); }
+function rotateRig(p, a) { rig.position.sub(p).applyAxisAngle(UP, a).add(p); rig.rotation.y += a; }
+function placeHead(x, z, yaw = null) {
+  const head = headPos(); let y = headYaw();
+  if (yaw !== null) { rotateRig(head, yaw - y); y = yaw; }
+  rig.position.x += x - head.x; rig.position.z += z - head.z;
+  rig.updateMatrixWorld(true);
+  return { x, z, yaw: y, eye: head.y };
+}
+function placePanel(pose, side = 0) {
+  const fx = -Math.sin(pose.yaw), fz = -Math.cos(pose.yaw), rx = Math.cos(pose.yaw), rz = -Math.sin(pose.yaw);
+  const eye = Math.max(1.1, pose.eye);
+  // tief und geneigt wie ein Pult: der Strahl zur Bahn läuft darüber hinweg
+  panel.position.set(pose.x + fx * 0.55 + rx * side, Math.max(0.7, eye - 0.72), pose.z + fz * 0.55 + rz * side);
+  panel.rotation.set(-0.85, pose.yaw, 0);
+  panel.visible = true;
+}
+function goSpot(s) {
+  const yaw = Math.atan2(-(s.look[0] - s.x), -(s.look[1] - s.z));
+  placePanel(placeHead(s.x, s.z, yaw), s.side || 0);
+}
+const teleOK = (x, z) => x > ROOM.x0 + 0.3 && x < ROOM.x1 - 0.3 && z > ROOM.z0 + 0.3 && z < ROOM.z1 - 0.3 && !(x > TBL.x0 - 0.12 && x < TBL.x1 + 0.2 && z > TBL.z0 - 0.12 && z < TBL.z1 + 0.12);
+const arcGeo = new THREE.BufferGeometry(); arcGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(40 * 3), 3));
+const arcMat = new THREE.LineBasicMaterial({ color: 0x8fc4ff, toneMapped: false });
+const arc = new THREE.Line(arcGeo, arcMat); arc.frustumCulled = false; arc.visible = false; xrRoot.add(arc);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x8fc4ff, transparent: true, opacity: 0.8, toneMapped: false, side: THREE.DoubleSide });
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.25, 40), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.015; ring.visible = false; xrRoot.add(ring);
+let teleTarget = null;
+function updateArc(h) {
+  xrRay.setFromXRController(h.ctrl);
+  const p = xrRay.ray.origin.clone(), v = xrRay.ray.direction.clone().multiplyScalar(6.5), pos = arcGeo.attributes.position.array;
+  let n = 0, hit = null;
+  for (; n < 40; n++) {
+    pos[n * 3] = p.x; pos[n * 3 + 1] = p.y; pos[n * 3 + 2] = p.z;
+    if (p.y <= 0) { hit = p.clone(); hit.y = 0; n++; break; }
+    p.addScaledVector(v, 0.03); v.y -= 9.81 * 0.03;
+  }
+  arcGeo.setDrawRange(0, n); arcGeo.attributes.position.needsUpdate = true;
+  const ok = hit && teleOK(hit.x, hit.z);
+  const col = ok ? 0x8fc4ff : 0xe0604a; arcMat.color.setHex(col); ringMat.color.setHex(col);
+  arc.visible = true; ring.visible = !!hit;
+  if (hit) ring.position.set(hit.x, 0.015, hit.z);
+  teleTarget = ok ? hit : null;
+}
+function readInput(h, rdt) {
+  const gp = h.src && h.src.gamepad; if (!gp) return;
+  const a = gp.axes || [], x = a.length >= 4 ? a[2] : (a[0] || 0), y = a.length >= 4 ? a[3] : (a[1] || 0);
+  if (!h.tele && y < -0.65 && Math.abs(x) < 0.6 && !h.drag && !HANDS.some(k => k !== h && k.tele)) h.tele = true;
+  if (h.tele) {
+    updateArc(h);
+    if (y > -0.3) {
+      h.tele = false; arc.visible = false; ring.visible = false;
+      if (teleTarget) { const pose = placeHead(teleTarget.x, teleTarget.z); placePanel(pose); xrPulse(h, 0.3, 20); }
+    }
+  } else if (Math.abs(x) > 0.7 && !h.turned) {
+    h.turned = true; rotateRig(headPos(), x > 0 ? -Math.PI / 6 : Math.PI / 6); rig.updateMatrixWorld(true);
+  } else if (Math.abs(x) < 0.3) h.turned = false;
+  const btn = !!((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[5] && gp.buttons[5].pressed));
+  if (btn && !h.btnWas) {
+    const head = headPos(), near = head.distanceTo(panel.position) < 1.2;
+    if (panel.visible && near) panel.visible = false;
+    else placePanel({ x: head.x, z: head.z, yaw: headYaw(), eye: head.y });
+  }
+  h.btnWas = btn;
+}
+
+/* ---------- pro Bild ---------- */
+function xrUpdate(rdt, now) {
+  rig.updateMatrixWorld(true);
+  xrFrames++;
+  if (xrFrames === 4) {
+    goSpot(SPOTS[0]);
+    vrToast('Willkommen im Labor. Ziele mit dem Strahl auf einen Knopf und drücke den Trigger. Stick nach vorn: springen. Stick zur Seite: drehen.', 7);
+  }
+  const shown = panel.visible;
+  const targets = PROXIES.filter(proxyOK);
+  if (shown) targets.unshift(pScreen);
+  let labelHit = null;
+  for (const h of HANDS) {
+    if (!h.src) continue;
+    readInput(h, rdt);
+    xrRay.setFromXRController(h.ctrl);
+    const hits = h.tele || h.holding ? [] : xrRay.intersectObjects(targets, false);
+    const hit = hits[0] || null;
+    h.hit = hit;
+    if (h.drag) {
+      if (h.drag.kind === 'gate') setRange(`rG${h.drag.gi}`, Math.min(1.8, Math.max(0.2, rayToTrackS(h, 1.09) + h.drag.off)).toFixed(2));
+      else setRange('rS2', Math.min(1.6, Math.max(0.6, rayToTrackS(h, 1.05) + h.drag.off)).toFixed(2));
+    }
+    const len = hit ? hit.distance : 2.5;
+    h.laser.scale.z = len; h.laser.visible = h.src.targetRayMode === 'tracked-pointer' && !h.tele;
+    h.dot.visible = !!hit && !h.tele; if (hit) h.dot.position.copy(hit.point);
+    h.hover.visible = false;
+    if (hit && hit.object === pScreen) {
+      const px = hit.uv.x * PW, py = (1 - hit.uv.y) * PH;
+      const w = WIDGETS.find(k => px >= k.x && px <= k.x + k.w && py >= k.y && py <= k.y + k.h);
+      if (w) {
+        h.hover.visible = true;
+        h.hover.position.set((w.x + w.w / 2) / PW * PANEL_W - PANEL_W / 2, PANEL_H / 2 - (w.y + w.h / 2) / PH * PANEL_H, 0.0015);
+        h.hover.scale.set(w.w / PW * PANEL_W, w.h / PH * PANEL_H, 1);
+      }
+    } else if (hit) labelHit = hit;
+  }
+  PROXIES.forEach(p => { p.material.visible = HANDS.some(h => h.hit && h.hit.object === p); });
+  if (labelHit) {
+    setHoverLabel(labelHit.object.userData.vr === 'start' ? (zugMode() ? 'Haltemagnet lösen' : 'Federstarter auslösen') : labelHit.object.userData.label);
+    hoverLabel.position.copy(labelHit.point); hoverLabel.position.y += 0.07; hoverLabel.visible = true;
+  } else hoverLabel.visible = false;
+  if (vrMsg.visible && now > vrMsgUntil) vrMsg.visible = false;
+  if (panelDirty && panel.visible) renderPanel();
+  renderStatus();
+  if (boardDirty) renderBoard();
+  const dragging = HANDS.some(h => h.drag);
+  renderer.shadowMap.needsUpdate = S.running || dragging || frameNo % 30 === 0;
+}
+
+/* ---------- Sitzung ---------- */
+async function loadXRModels() {
+  if (xrModelsLoaded) return; xrModelsLoaded = true;
+  try {
+    const [{ XRControllerModelFactory }, { XRHandModelFactory }] = await Promise.all([
+      import('three/addons/webxr/XRControllerModelFactory.js'), import('three/addons/webxr/XRHandModelFactory.js')]);
+    const cf = new XRControllerModelFactory(), hf = new XRHandModelFactory();
+    HANDS.forEach(h => { h.grip.add(cf.createControllerModel(h.grip)); h.hand.add(hf.createHandModel(h.hand, 'mesh')); });
+  } catch (e) { console.warn('Controller-Modelle nicht geladen', e); }
+}
+function setShadowSize(n) { key.shadow.mapSize.set(n, n); if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; } }
+renderer.xr.addEventListener('sessionstart', () => {
+  xrSaved = { pos: camera.position.clone(), tgt: controls.target.clone() };
+  xrOn = true; xrFrames = 0; camTween = null;
+  controls.enabled = false; xrRoot.visible = true; motes.visible = false;
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
+  panel.visible = false;
+  setShadowSize(1024); renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+  panelDirty = true; boardDirty = true; statusText = '';
+  $('chart').style.cssText = 'width:640px;height:430px';
+  renderChart();
+  loadXRModels();
+});
+renderer.xr.addEventListener('sessionend', () => {
+  xrOn = false;
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
+  rig.updateMatrixWorld(true);
+  camera.position.copy(xrSaved.pos); camera.quaternion.identity(); controls.target.copy(xrSaved.tgt);
+  camera.matrixAutoUpdate = true;
+  controls.enabled = true; xrRoot.visible = false; motes.visible = true;
+  setShadowSize(2048); renderer.shadowMap.autoUpdate = true;
+  $('chart').style.cssText = '';
+  renderChart();
+  resize(); controls.update();
+});
+async function enterVR() {
+  audioInit();
+  const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] });
+  let type = 'local-floor';
+  try { await session.requestReferenceSpace('local-floor'); } catch (e) { type = 'local'; }
+  renderer.xr.setReferenceSpaceType(type);
+  rig.userData.floorless = type === 'local';
+  await renderer.xr.setSession(session);
+}
+$('btnVR').addEventListener('click', () => enterVR().catch(e => toast('VR konnte nicht starten: ' + e.message)));
+if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported('immersive-vr').then(ok => { if (ok) $('btnVR').hidden = false; }).catch(() => { });
+if (location.search.includes('debug')) window.__lab = { THREE, renderer, scene, camera, controls, S, P, rig, panel, pScreen, goSpot, SPOTS, PROXIES, HANDS, PW, PH, PANEL_W, PANEL_H, get WIDGETS() { return WIDGETS; }, get vrTab() { return vrTab; }, get PROTO() { return PROTO; } };
+
+/* =========================================================
    Start
    ========================================================= */
 buildGateRows();
@@ -1744,7 +2317,7 @@ resetRun();
 syncProtoTab();
 renderProto();
 resize();
-requestAnimationFrame(frame);
+renderer.setAnimationLoop(frame);
 </script>
 <!-- rechtliches --><style>.erik-recht{font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;text-align:center;padding:18px 12px 22px;opacity:.75}.erik-recht a{color:inherit}@media print{.erik-recht{display:none}}</style><footer class="erik-recht"><a href="https://erikdahlmann.github.io/impressum.html">Impressum</a> · <a href="https://erikdahlmann.github.io/datenschutz.html">Datenschutz</a></footer><!-- /rechtliches --></body>
 </html>
